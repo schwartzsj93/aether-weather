@@ -1,0 +1,26 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.*
+!.env.example
+.DS_Store
+.vscode
+.idea
+coverage
+stats.html
+
+# Infrastructure build output
+infrastructure/dist
+infrastructure/node_modules
+infrastructure/.cdk.staging
+infrastructure/cdk.out
+
+# Lambda build output
+lambda/proxy/dist
+lambda/proxy/node_modules
+
+# CDK outputs (may contain sensitive ARNs)
+cdk-outputs.json
+.claude/

@@ -1,0 +1,95 @@
+@import 'tailwindcss';
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+/* -------------------------------------------------------------------------- */
+/* Design tokens                                                              */
+/* -------------------------------------------------------------------------- */
+@theme {
+  --color-bg-deep: #05070f;
+  --color-bg-base: #0b1020;
+  --color-bg-soft: #111733;
+  --color-fg: #f8fafc;
+  --color-muted: #94a3b8;
+  --color-accent: #7dd3fc;          /* sky-300 */
+  --color-accent-strong: #38bdf8;   /* sky-400 */
+  --color-warn: #fbbf24;
+  --color-danger: #f43f5e;
+  --color-good: #34d399;
+
+  --font-display: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --radius-card: 1.25rem;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Base                                                                       */
+/* -------------------------------------------------------------------------- */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: var(--font-display);
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  -webkit-font-smoothing: antialiased;
+  background: var(--color-bg-deep);
+  color: var(--color-fg);
+}
+
+/* Subtle global aurora — sits behind everything */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 10% -10%, rgba(125, 211, 252, 0.18), transparent 60%),
+    radial-gradient(50rem 35rem at 110% 10%, rgba(167, 139, 250, 0.14), transparent 65%),
+    radial-gradient(70rem 50rem at 50% 120%, rgba(59, 130, 246, 0.12), transparent 70%);
+  z-index: 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Glass + utility                                                            */
+/* -------------------------------------------------------------------------- */
+@utility glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+}
+
+@utility glass-strong {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.65), rgba(15, 23, 42, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+/* MapLibre overrides — strip default chrome and recolor controls */
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-bottom-left,
+.maplibregl-ctrl-bottom-right {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.55) !important;
+  font-size: 10px !important;
+}
+.maplibregl-ctrl-attrib a { color: rgba(255, 255, 255, 0.7) !important; }
+.maplibregl-canvas:focus { outline: none; }
+
+/* Smooth number ticker */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+.animate-pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
+
+/* Radar timeline scrubber — keep the focus ring tasteful */
+input[type='range'] { accent-color: var(--color-accent-strong); }

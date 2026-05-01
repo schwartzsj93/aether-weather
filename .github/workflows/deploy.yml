@@ -1,0 +1,112 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # Allow manual deploys from the GitHub UI
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false   # Never cancel a running deploy — let it finish
+
+permissions:
+  id-token: write    # Required for OIDC → AWS role assumption
+  contents: read
+
+jobs:
+  # ── Build + deploy frontend ─────────────────────────────────────────────────
+  deploy-frontend:
+    name: Build & Deploy Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          # VITE_LLM_PROVIDER=anthropic enables the LLM briefing. No API key
+          # needed here — the Lambda proxy injects it server-side at runtime.
+          VITE_LLM_PROVIDER: anthropic
+          # Bake in the CloudFront URL so the app can link to itself.
+          VITE_APP_URL: ${{ secrets.APP_URL }}
+        run: npm run build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync dist/ s3://${{ secrets.BUCKET_NAME }}/ \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "index.html" \
+            --exclude "*.webmanifest" \
+            --exclude "sw.js"
+
+          # index.html, manifest, and service worker must never be cached by the
+          # browser — they're the shell that kicks off the versioned asset load.
+          aws s3 sync dist/ s3://${{ secrets.BUCKET_NAME }}/ \
+            --exclude "*" \
+            --include "index.html" \
+            --include "*.webmanifest" \
+            --include "sw.js" \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CF_DISTRIBUTION_ID }} \
+            --paths "/index.html" "/sw.js" "/*.webmanifest"
+
+  # ── (Optional) Deploy CDK infra changes ────────────────────────────────────
+  # Only runs when infrastructure/ or lambda/ files change. On a first setup
+  # you run `cdk deploy` locally once; this job keeps the Lambda code in sync.
+  deploy-infra:
+    name: Deploy CDK Infrastructure
+    runs-on: ubuntu-latest
+    # Only deploy infra when infrastructure or lambda code changes
+    if: |
+      contains(github.event.head_commit.modified, 'infrastructure/') ||
+      contains(github.event.head_commit.modified, 'lambda/')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install infrastructure deps
+        run: cd infrastructure && npm ci
+
+      - name: Install lambda deps
+        run: cd lambda/proxy && npm ci
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: CDK Deploy
+        run: cd infrastructure && npm run deploy
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          GITHUB_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO: ${{ github.event.repository.name }}
