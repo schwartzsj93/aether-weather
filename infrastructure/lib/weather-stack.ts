@@ -64,36 +64,12 @@ export class WeatherAppStack extends cdk.Stack {
     });
 
     // ─── Lambda — streaming Anthropic proxy ───────────────────────────────────
-    // Deployed from ../lambda/proxy with esbuild bundling.
+    // Pre-built by `cd lambda/proxy && npx esbuild index.ts --bundle ...`.
+    // The dist/ directory is committed and deployed as-is — no Docker needed.
     const proxyFn = new lambda.Function(this, 'AnthropicProxy', {
       runtime:     lambda.Runtime.NODEJS_20_X,
       handler:     'index.handler',
-      code:        lambda.Code.fromAsset(path.join(__dirname, '../../lambda/proxy'), {
-        bundling: {
-          image: lambda.Runtime.NODEJS_20_X.bundlingImage,
-          command: [
-            'bash', '-c',
-            [
-              'npm ci --omit=dev',
-              'npx esbuild index.ts --bundle --platform=node --target=node20 --outfile=/asset-output/index.js',
-            ].join(' && '),
-          ],
-          // Local bundling via esbuild (faster than Docker when available).
-          local: {
-            tryBundle(outputDir) {
-              try {
-                const { execSync } = require('node:child_process');
-                execSync(
-                  'npx esbuild index.ts --bundle --platform=node --target=node20 --outfile=' +
-                    outputDir + '/index.js',
-                  { cwd: path.join(__dirname, '../../lambda/proxy'), stdio: 'inherit' }
-                );
-                return true;
-              } catch { return false; }
-            },
-          },
-        },
-      }),
+      code:        lambda.Code.fromAsset(path.join(__dirname, '../../lambda/proxy/dist')),
       // Lambda streaming timeout can be up to 15 min; 60s is plenty for Claude.
       timeout:     cdk.Duration.seconds(60),
       memorySize:  256,
@@ -113,7 +89,7 @@ export class WeatherAppStack extends cdk.Stack {
       invokeMode:  lambda.InvokeMode.RESPONSE_STREAM,
       cors: {
         allowedOrigins: ['*'],       // CloudFront adds real CORS headers; Lambda is internal
-        allowedMethods: [lambda.HttpMethod.POST, lambda.HttpMethod.OPTIONS],
+        allowedMethods: [lambda.HttpMethod.ALL],
         allowedHeaders: ['content-type', 'anthropic-version', 'anthropic-beta'],
       },
     });

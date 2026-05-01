@@ -17,8 +17,8 @@ infrastructure/node_modules
 infrastructure/.cdk.staging
 infrastructure/cdk.out
 
-# Lambda build output
-lambda/proxy/dist
+# Lambda build output — dist IS committed (pre-built, no Docker needed in CI)
+!lambda/proxy/dist
 lambda/proxy/node_modules
 
 # CDK outputs (may contain sensitive ARNs)
