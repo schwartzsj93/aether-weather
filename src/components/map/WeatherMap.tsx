@@ -147,11 +147,12 @@ export function WeatherMap({ location }: Props) {
           id: sourceId,
           type: 'raster',
           source: sourceId,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           paint: {
             'raster-opacity': i === frameIndex ? opacity : 0,
             'raster-opacity-transition': { duration: 250 },
             'raster-fade-duration': 0,
-          },
+          } as any,
         });
       });
     };

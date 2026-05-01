@@ -1,9 +1,11 @@
 import { motion, type HTMLMotionProps } from 'framer-motion';
-import { forwardRef } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils/cn';
 
 interface GlassCardProps extends HTMLMotionProps<'div'> {
   intense?: boolean;
+  /** Explicit ReactNode override — framer-motion v12 widens children to include MotionValues */
+  children?: ReactNode;
 }
 
 export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
