@@ -143,9 +143,12 @@ function getClient(): Anthropic | null {
     // The Lambda reads the real key from Secrets Manager and injects it.
     // We pass a placeholder — the SDK requires the field, but it's stripped
     // and replaced by the proxy before the request reaches Anthropic.
+    // The SDK requires an absolute URL — a relative path like '/api/anthropic'
+    // is rejected with "cannot be parsed as a URL". Prefix with origin so we
+    // get https://dllow6zve33wp.cloudfront.net/api/anthropic (or localhost in dev).
     client = new Anthropic({
       apiKey: 'proxy',          // replaced server-side — never reaches Anthropic
-      baseURL: '/api/anthropic', // CloudFront routes this to the Lambda Function URL
+      baseURL: `${window.location.origin}/api/anthropic`,
       dangerouslyAllowBrowser: true,
     });
   }

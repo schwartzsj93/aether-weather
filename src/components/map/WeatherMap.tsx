@@ -140,7 +140,11 @@ export function WeatherMap({ location }: Props) {
         m.addSource(sourceId, {
           type: 'raster',
           tiles: [url],
-          tileSize: 256,
+          tileSize: 512,
+          // RainViewer tiles only go to zoom 6; MapLibre will overzoom (scale up)
+          // the z=6 tile rather than fetching a z=11 tile that returns
+          // "Zoom Level Not Supported".
+          maxzoom: 6,
           attribution: '© <a href="https://www.rainviewer.com/api.html">RainViewer</a>',
         });
         m.addLayer({
