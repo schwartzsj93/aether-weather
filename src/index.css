@@ -2,7 +2,7 @@
 @import 'maplibre-gl/dist/maplibre-gl.css';
 
 /* -------------------------------------------------------------------------- */
-/* Design tokens                                                              */
+/* Design tokens                                                               */
 /* -------------------------------------------------------------------------- */
 @theme {
   --color-bg-deep: #05070f;
@@ -23,7 +23,7 @@
 }
 
 /* -------------------------------------------------------------------------- */
-/* Base                                                                       */
+/* Base                                                                        */
 /* -------------------------------------------------------------------------- */
 html, body, #root {
   height: 100%;
@@ -38,34 +38,91 @@ body {
   color: var(--color-fg);
 }
 
-/* Subtle global aurora — sits behind everything */
+/* Global aurora — slowly breathes in the background */
+@keyframes aurora-breathe {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%       { opacity: 0.7; transform: scale(1.06) translate(-1%, 1%); }
+}
+
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(60rem 40rem at 10% -10%, rgba(125, 211, 252, 0.18), transparent 60%),
-    radial-gradient(50rem 35rem at 110% 10%, rgba(167, 139, 250, 0.14), transparent 65%),
-    radial-gradient(70rem 50rem at 50% 120%, rgba(59, 130, 246, 0.12), transparent 70%);
+    radial-gradient(65rem 45rem at 8%  -8%,  rgba(125, 211, 252, 0.20), transparent 58%),
+    radial-gradient(55rem 38rem at 108% 5%,  rgba(167, 139, 250, 0.15), transparent 62%),
+    radial-gradient(75rem 55rem at 50% 115%, rgba(59,  130, 246, 0.13), transparent 68%);
+  animation: aurora-breathe 28s ease-in-out infinite;
   z-index: 0;
 }
 
 /* -------------------------------------------------------------------------- */
-/* Glass + utility                                                            */
+/* Glass system                                                                */
 /* -------------------------------------------------------------------------- */
+
+/*
+ * Base glass — used on cards.
+ * The box-shadow layering gives cards a sense of floating depth:
+ *   - outer shadow: diffuse ambient occlusion beneath the card
+ *   - inset 0 1px: top-edge catch light (subtle white shimmer at top)
+ *   - inset 0 -1px: bottom-edge depth shadow
+ */
 @utility glass {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  background: linear-gradient(
+    158deg,
+    rgba(255, 255, 255, 0.075) 0%,
+    rgba(255, 255, 255, 0.025) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 2px  8px  rgba(0, 0, 0, 0.30),
+    inset 0  1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.12);
 }
 
+/*
+ * Strong glass — used on map overlays / controls where contrast matters.
+ * Deeper blur, darker base, stronger shadow.
+ */
 @utility glass-strong {
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.65), rgba(15, 23, 42, 0.35));
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  background: linear-gradient(
+    158deg,
+    rgba(15, 23, 42, 0.78) 0%,
+    rgba(15, 23, 42, 0.42) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  backdrop-filter: blur(32px) saturate(170%);
+  -webkit-backdrop-filter: blur(32px) saturate(170%);
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.55),
+    0 2px  8px  rgba(0, 0, 0, 0.35),
+    inset 0  1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.18);
+}
+
+/*
+ * card-lift — apply to a glass card's wrapper when you want a hover lift effect.
+ * Uses will-change so the GPU handles the transition without repainting siblings.
+ */
+@utility card-lift {
+  will-change: transform;
+  transition:
+    transform  0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow:
+      0 16px 48px rgba(0, 0, 0, 0.55),
+      0 4px  12px rgba(0, 0, 0, 0.35),
+      0 0    0 1px rgba(125, 211, 252, 0.09),
+      inset 0  1px 0 rgba(255, 255, 255, 0.10),
+      inset 0 -1px 0 rgba(0,   0,   0,   0.14);
+  }
 }
 
 @utility no-scrollbar {
@@ -73,7 +130,9 @@ body::before {
   &::-webkit-scrollbar { display: none; }
 }
 
-/* MapLibre overrides — strip default chrome and recolor controls */
+/* -------------------------------------------------------------------------- */
+/* MapLibre overrides                                                          */
+/* -------------------------------------------------------------------------- */
 .maplibregl-ctrl-attrib,
 .maplibregl-ctrl-bottom-left,
 .maplibregl-ctrl-bottom-right {
@@ -84,12 +143,14 @@ body::before {
 .maplibregl-ctrl-attrib a { color: rgba(255, 255, 255, 0.7) !important; }
 .maplibregl-canvas:focus { outline: none; }
 
-/* Smooth number ticker */
+/* -------------------------------------------------------------------------- */
+/* Animations                                                                  */
+/* -------------------------------------------------------------------------- */
 @keyframes pulse-soft {
   0%, 100% { opacity: 1; }
-  50%      { opacity: 0.55; }
+  50%       { opacity: 0.55; }
 }
 .animate-pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
 
-/* Radar timeline scrubber — keep the focus ring tasteful */
+/* Radar timeline scrubber */
 input[type='range'] { accent-color: var(--color-accent-strong); }

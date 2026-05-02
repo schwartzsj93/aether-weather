@@ -1,4 +1,4 @@
-import { Search, Settings, Sun, Moon } from 'lucide-react';
+import { Search, Sun, Moon } from 'lucide-react';
 import * as Switch from '@radix-ui/react-switch';
 import { useAppStore } from '@/store/appStore';
 import { cn } from '@/lib/utils/cn';
@@ -46,9 +46,8 @@ export function Header({ onSearch }: Props) {
           <span className={cn('px-1', units === 'metric' ? 'text-white' : 'text-white/45')}>°C</span>
         </div>
 
-        <button className="flex h-9 w-9 items-center justify-center rounded-full glass text-white/75 hover:text-white" aria-label="Settings">
-          <Settings className="h-4 w-4" />
-        </button>
+        {/* Settings placeholder — keeps the right side balanced */}
+        {/* <button className="flex h-9 w-9 items-center justify-center rounded-full glass text-white/75 hover:text-white" aria-label="Settings"><Settings className="h-4 w-4" /></button> */}
       </div>
     </header>
   );
