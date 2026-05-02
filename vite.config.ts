@@ -26,6 +26,13 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Activate the new SW immediately — don't wait for old tabs to close.
+        // Without this the browser keeps running the previous bundle even after
+        // a successful deploy, because the old SW stays in control until every
+        // tab is closed.  With skipWaiting + clientsClaim the new SW takes over
+        // on the next page load (the page is reloaded automatically by autoUpdate).
+        skipWaiting: true,
+        clientsClaim: true,
         // Cache weather + tile responses with a stale-while-revalidate strategy.
         runtimeCaching: [
           {

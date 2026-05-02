@@ -67,9 +67,14 @@ jobs:
 
       - name: Invalidate CloudFront cache
         run: |
+          # Invalidate everything so browsers always get the latest SW + JS chunks.
+          # Hashed assets are "immutable" in S3, but CloudFront can still serve
+          # stale copies of the *previous* hash filenames to in-flight requests.
+          # A /* invalidation is cheap (<1000 paths/month free) and guarantees
+          # fresh content on every deploy.
           aws cloudfront create-invalidation \
             --distribution-id ${{ secrets.CF_DISTRIBUTION_ID }} \
-            --paths "/index.html" "/sw.js" "/*.webmanifest"
+            --paths "/*"
 
   # ── (Optional) Deploy CDK infra changes ────────────────────────────────────
   # Only runs when infrastructure/ or lambda/ files change. On a first setup
