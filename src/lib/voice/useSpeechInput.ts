@@ -118,7 +118,17 @@ export function useSpeechInput(onFinal: (text: string) => void) {
     rec.maxAlternatives  = 1;
     recognitionRef.current = rec;
 
+    // Guard: if onstart doesn't fire within 900ms the browser silently blocked us.
+    // Emit a synthetic error so VoiceAgent can surface a helpful message.
+    const startGuard = setTimeout(() => {
+      setState((s) => {
+        if (s.listening) return s; // started fine, nothing to do
+        return { ...s, error: 'Microphone error: not-allowed' };
+      });
+    }, 900);
+
     rec.onstart = () => {
+      clearTimeout(startGuard);
       if (mounted.current) setState({ transcript: '', listening: true, supported: true, error: null });
     };
 
