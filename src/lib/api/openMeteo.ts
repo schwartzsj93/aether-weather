@@ -40,6 +40,7 @@ interface OMForecastResponse {
   hourly: {
     time: string[];
     temperature_2m: number[];
+    apparent_temperature: number[];
     precipitation: number[];
     precipitation_probability: number[];
     wind_speed_10m: number[];
@@ -116,6 +117,7 @@ export async function fetchWeather(location: Location, units: Units): Promise<We
     ].join(','),
     hourly: [
       'temperature_2m',
+      'apparent_temperature',
       'precipitation',
       'precipitation_probability',
       'wind_speed_10m',
@@ -162,6 +164,7 @@ export async function fetchWeather(location: Location, units: Units): Promise<We
   const hourly: HourlyPoint[] = res.hourly.time.map((t, i) => ({
     time: t,
     temperature: res.hourly.temperature_2m[i],
+    feelsLike: res.hourly.apparent_temperature[i] ?? res.hourly.temperature_2m[i],
     precipitation: res.hourly.precipitation[i],
     precipitationProbability: res.hourly.precipitation_probability[i] ?? 0,
     windSpeed: res.hourly.wind_speed_10m[i],

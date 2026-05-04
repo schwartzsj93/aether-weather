@@ -41,6 +41,7 @@ export interface CurrentConditions {
 export interface HourlyPoint {
   time: string;
   temperature: number;
+  feelsLike: number;
   precipitation: number;
   precipitationProbability: number;
   windSpeed: number;

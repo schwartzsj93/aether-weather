@@ -122,7 +122,7 @@ export function Dashboard() {
                 className="relative overflow-hidden rounded-[var(--radius-card)]"
                 style={{ height: 'clamp(360px, 46vh, 580px)' }}
               >
-                <WeatherMap location={weather.data.location} />
+                <WeatherMap location={weather.data.location} units={weather.data.units} />
 
                 {/* Bottom dissolve: map fades seamlessly into the card section  */}
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28
