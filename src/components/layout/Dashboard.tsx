@@ -17,6 +17,7 @@ import { SunMoonCard } from '@/components/weather/SunMoonCard';
 import { AlertsBanner } from '@/components/weather/AlertsBanner';
 import { EnsembleInsights } from '@/components/weather/EnsembleInsights';
 import { WeatherMap } from '@/components/map/WeatherMap';
+import { VoiceAgent } from '@/components/voice/VoiceAgent';
 
 /** Staggered fade-up reveal wrapper used for every card below the hero map. */
 function CardReveal({ delay = 0, className = '', children }: {
@@ -116,6 +117,7 @@ export function Dashboard() {
               {/* The map is no longer confined to a grid column. It spans the    */}
               {/* entire content width so radar/satellite/wind feel immersive.    */}
               <motion.div
+                id="section-map"
                 initial={{ opacity: 0, scale: 0.994 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
@@ -135,7 +137,7 @@ export function Dashboard() {
               </motion.div>
 
               {/* ── ROW 1 — current conditions + AI briefing ──────────────────── */}
-              <div className="grid grid-cols-12 gap-4 md:gap-5 lg:gap-6">
+              <div id="section-current" className="grid grid-cols-12 gap-4 md:gap-5 lg:gap-6">
                 <div className="col-span-12 lg:col-span-5">
                   <CardReveal delay={0.08}>
                     <CurrentConditions bundle={weather.data} />
@@ -150,12 +152,12 @@ export function Dashboard() {
 
               {/* ── ROW 2 — hourly sparkline + 10-day outlook ─────────────────── */}
               <div className="grid grid-cols-12 gap-4 md:gap-5 lg:gap-6">
-                <div className="col-span-12 min-w-0 lg:col-span-7">
+                <div id="section-hourly" className="col-span-12 min-w-0 lg:col-span-7">
                   <CardReveal delay={0.24}>
                     <HourlyForecast bundle={weather.data} />
                   </CardReveal>
                 </div>
-                <div className="col-span-12 min-w-0 lg:col-span-5">
+                <div id="section-daily" className="col-span-12 min-w-0 lg:col-span-5">
                   <CardReveal delay={0.3}>
                     <DailyForecast bundle={weather.data} />
                   </CardReveal>
@@ -169,7 +171,7 @@ export function Dashboard() {
                     <SunMoonCard bundle={weather.data} />
                   </CardReveal>
                 </div>
-                <div className="col-span-12 md:col-span-6 lg:col-span-3">
+                <div id="section-airquality" className="col-span-12 md:col-span-6 lg:col-span-3">
                   <CardReveal delay={0.41}>
                     {airQuality.data ? (
                       <AirQualityCard aq={airQuality.data} />
@@ -202,6 +204,9 @@ export function Dashboard() {
       </div>
 
       <LocationSearch open={searchOpen} onOpenChange={setSearchOpen} />
+
+      {/* Bond voice agent — always mounted, receives bundle when ready */}
+      <VoiceAgent bundle={weather.data ?? null} />
     </div>
   );
 }

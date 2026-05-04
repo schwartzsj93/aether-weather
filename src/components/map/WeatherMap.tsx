@@ -82,6 +82,15 @@ export function WeatherMap({ location, units }: Props) {
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
 
+  // ── Voice agent: listen for programmatic expand ───────────────────────────
+  useEffect(() => {
+    const onExpand = () => {
+      mapRootRef.current?.requestFullscreen().catch(() => {});
+    };
+    document.addEventListener('aether:expandMap', onExpand);
+    return () => document.removeEventListener('aether:expandMap', onExpand);
+  }, []);
+
   // ── Initialise the map ────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
