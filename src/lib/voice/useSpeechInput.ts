@@ -118,17 +118,8 @@ export function useSpeechInput(onFinal: (text: string) => void) {
     rec.maxAlternatives  = 1;
     recognitionRef.current = rec;
 
-    // Guard: if onstart doesn't fire within 30 s the browser silently blocked us.
-    // We use a long timeout so a first-time permission dialog (where the user
-    // takes several seconds to read and click "Allow") doesn't trip this guard
-    // prematurely. Real denials fire onerror immediately; this is only a safety
-    // net for browsers that neither call onstart nor onerror at all.
-    const startGuard = setTimeout(() => {
-      setState((s) => {
-        if (s.listening) return s; // started fine, nothing to do
-        return { ...s, error: 'Microphone error: not-allowed' };
-      });
-    }, 30_000);
+    // startGuard declared here so both onstart and beginRecognition share it.
+    let startGuard: ReturnType<typeof setTimeout>;
 
     rec.onstart = () => {
       clearTimeout(startGuard);
@@ -163,7 +154,41 @@ export function useSpeechInput(onFinal: (text: string) => void) {
       setState((s) => ({ ...s, listening: false, error: msg }));
     };
 
-    rec.start();
+    // Starts the recognition session + arms the safety-net guard.
+    const beginRecognition = () => {
+      // Guard: if onstart never fires the browser silently blocked us.
+      // 30 s gives plenty of time for a user to read a permission dialog.
+      startGuard = setTimeout(() => {
+        setState((s) => {
+          if (s.listening) return s;
+          return { ...s, error: 'Microphone error: not-allowed' };
+        });
+      }, 30_000);
+      rec.start();
+    };
+
+    // ── Prime mic permission via getUserMedia first ────────────────────────
+    // SpeechRecognition.start() can silently fail with 'not-allowed' on
+    // Chrome/macOS when the browser has never been added to the macOS
+    // Microphone list.  Calling getUserMedia first triggers the full
+    // Chrome → macOS permission dialog chain, adds Chrome to the list, and
+    // then hands off to SpeechRecognition which works immediately.
+    if (navigator.mediaDevices?.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((stream) => {
+          // Stop all tracks straight away — we only needed the permission grant.
+          stream.getTracks().forEach((t) => t.stop());
+          beginRecognition();
+        })
+        .catch(() => {
+          // getUserMedia itself was denied — beginRecognition anyway so
+          // onerror fires and the UI surfaces a helpful message.
+          beginRecognition();
+        });
+    } else {
+      beginRecognition();
+    }
   }, []);
 
   const reset = useCallback(() => {
