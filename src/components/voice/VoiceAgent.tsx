@@ -201,6 +201,8 @@ export function VoiceAgent({ bundle }: Props) {
       // isn't blocked by Chrome's autoplay policy.
       unlockAudio();
 
+      // Clear any stale error from a previous session so the UI starts clean.
+      speech.reset();
       setBondError(null);
       setOrbState('listening');
       speech.start();

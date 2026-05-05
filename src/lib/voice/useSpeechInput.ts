@@ -118,14 +118,17 @@ export function useSpeechInput(onFinal: (text: string) => void) {
     rec.maxAlternatives  = 1;
     recognitionRef.current = rec;
 
-    // Guard: if onstart doesn't fire within 900ms the browser silently blocked us.
-    // Emit a synthetic error so VoiceAgent can surface a helpful message.
+    // Guard: if onstart doesn't fire within 30 s the browser silently blocked us.
+    // We use a long timeout so a first-time permission dialog (where the user
+    // takes several seconds to read and click "Allow") doesn't trip this guard
+    // prematurely. Real denials fire onerror immediately; this is only a safety
+    // net for browsers that neither call onstart nor onerror at all.
     const startGuard = setTimeout(() => {
       setState((s) => {
         if (s.listening) return s; // started fine, nothing to do
         return { ...s, error: 'Microphone error: not-allowed' };
       });
-    }, 900);
+    }, 30_000);
 
     rec.onstart = () => {
       clearTimeout(startGuard);
