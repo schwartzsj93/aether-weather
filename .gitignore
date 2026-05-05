@@ -24,3 +24,4 @@ lambda/proxy/node_modules
 # CDK outputs (may contain sensitive ARNs)
 cdk-outputs.json
 .claude/
+.env.local

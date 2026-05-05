@@ -156,13 +156,13 @@ function getClient(): Anthropic | null {
   return client;
 }
 
-/** True when the LLM briefing is configured — either dev key or prod proxy. */
+/** True when the LLM briefing is configured.
+ *  Setting VITE_LLM_PROVIDER=anthropic is the sole requirement — no key
+ *  needed in prod (the Lambda proxy injects it), and in dev the call will
+ *  fail gracefully to the OFFLINE state and fall back to rule-based prose. */
 export function isLLMEnabled(): boolean {
   const provider = (import.meta.env.VITE_LLM_PROVIDER as string | undefined)?.trim();
-  if (provider !== 'anthropic') return false;
-  // Dev: explicit key. Prod: provider flag alone is enough (proxy handles auth).
-  const apiKey = (import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined)?.trim();
-  return !!(apiKey || import.meta.env.PROD);   // PROD is set to true by Vite in production builds
+  return provider === 'anthropic';
 }
 
 /**
