@@ -12667,7 +12667,7 @@ var require_dist_cjs41 = __commonJS({
     var utilBufferFrom = require_dist_cjs8();
     var utilUtf8 = require_dist_cjs9();
     var buffer = require("buffer");
-    var crypto2 = require("crypto");
+    var crypto3 = require("crypto");
     var Hash5 = class {
       algorithmIdentifier;
       secret;
@@ -12684,7 +12684,7 @@ var require_dist_cjs41 = __commonJS({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? crypto2.createHmac(this.algorithmIdentifier, castSourceData(this.secret)) : crypto2.createHash(this.algorithmIdentifier);
+        this.hash = this.secret ? crypto3.createHmac(this.algorithmIdentifier, castSourceData(this.secret)) : crypto3.createHash(this.algorithmIdentifier);
       }
     };
     function castSourceData(toCast, encoding) {
@@ -25063,6 +25063,7 @@ __export(index_exports, {
   handler: () => handler
 });
 module.exports = __toCommonJS(index_exports);
+var import_node_crypto = __toESM(require("node:crypto"));
 var import_node_https = __toESM(require("node:https"));
 var import_client_secrets_manager = __toESM(require_dist_cjs56());
 var sm = new import_client_secrets_manager.SecretsManagerClient({});
@@ -25077,8 +25078,37 @@ async function getApiKey() {
   cachedApiKey = parsed.apiKey;
   return cachedApiKey;
 }
-var ALLOWED_METHODS = /* @__PURE__ */ new Set(["POST", "OPTIONS"]);
+var cachedKalshiCreds = void 0;
+async function getKalshiCredentials() {
+  if (cachedKalshiCreds !== void 0) return cachedKalshiCreds;
+  const secretArn = process.env.KALSHI_SECRET_ARN;
+  if (!secretArn) {
+    cachedKalshiCreds = null;
+    return null;
+  }
+  try {
+    const res = await sm.send(new import_client_secrets_manager.GetSecretValueCommand({ SecretId: secretArn }));
+    const parsed = JSON.parse(res.SecretString ?? "{}");
+    if (!parsed.keyId || !parsed.privateKey) {
+      console.warn("[proxy] Kalshi secret missing keyId or privateKey fields.");
+      cachedKalshiCreds = null;
+      return null;
+    }
+    cachedKalshiCreds = { keyId: parsed.keyId, privateKey: parsed.privateKey };
+    return cachedKalshiCreds;
+  } catch (err) {
+    console.error("[proxy] Failed to fetch Kalshi credentials:", err);
+    cachedKalshiCreds = null;
+    return null;
+  }
+}
+function signKalshi(method, path, ts, privateKey) {
+  const msg = ts + method.toUpperCase() + path;
+  return import_node_crypto.default.createSign("RSA-SHA256").update(msg).end().sign(privateKey, "base64");
+}
+var ANTHROPIC_ALLOWED_METHODS = /* @__PURE__ */ new Set(["POST", "OPTIONS"]);
 var ANTHROPIC_HOST = "api.anthropic.com";
+var KALSHI_HOST = "trading-api.kalshi.com";
 function rejectStream(responseStream, statusCode, message) {
   const body = JSON.stringify({ error: message });
   const stream = awslambda.HttpResponseStream.from(responseStream, {
@@ -25087,16 +25117,31 @@ function rejectStream(responseStream, statusCode, message) {
   });
   stream.end(body);
 }
+function sendJson(responseStream, statusCode, payload2, origin) {
+  const body = JSON.stringify(payload2);
+  const stream = awslambda.HttpResponseStream.from(responseStream, {
+    statusCode,
+    headers: {
+      "content-type": "application/json",
+      "content-length": String(Buffer.byteLength(body)),
+      "access-control-allow-origin": origin,
+      "cache-control": "no-cache"
+    }
+  });
+  stream.end(body);
+}
 var handler = awslambda.streamifyResponse(
   async (event, responseStream) => {
     const method = event.requestContext.http.method.toUpperCase();
     const origin = process.env.ALLOWED_ORIGIN ?? "*";
+    const isKalshi = event.rawPath.startsWith("/api/kalshi");
+    const isAnthropic = event.rawPath.startsWith("/api/anthropic");
     if (method === "OPTIONS") {
       const stream = awslambda.HttpResponseStream.from(responseStream, {
         statusCode: 204,
         headers: {
           "access-control-allow-origin": origin,
-          "access-control-allow-methods": "POST, OPTIONS",
+          "access-control-allow-methods": "GET, POST, OPTIONS",
           "access-control-allow-headers": "content-type, anthropic-version, anthropic-beta, x-request-id",
           "access-control-max-age": "86400"
         }
@@ -25104,7 +25149,59 @@ var handler = awslambda.streamifyResponse(
       stream.end();
       return;
     }
-    if (!ALLOWED_METHODS.has(method)) {
+    if (isKalshi) {
+      if (method !== "GET") {
+        rejectStream(responseStream, 405, "Only GET is supported for Kalshi market data.");
+        return;
+      }
+      const creds = await getKalshiCredentials();
+      if (!creds) {
+        sendJson(responseStream, 200, { markets: [] }, origin);
+        return;
+      }
+      const kalshiPath = event.rawPath.replace(/^\/api\/kalshi/, "") || "/trade-api/v2/markets";
+      const query2 = event.rawQueryString ? `?${event.rawQueryString}` : "";
+      const fullPath = kalshiPath + query2;
+      const ts = String(Date.now());
+      const signature = signKalshi("GET", kalshiPath, ts, creds.privateKey);
+      const requestOptions2 = {
+        hostname: KALSHI_HOST,
+        path: fullPath,
+        method: "GET",
+        headers: {
+          "kalshi-access-key": creds.keyId,
+          "kalshi-access-signature": signature,
+          "kalshi-access-timestamp": ts,
+          "content-type": "application/json",
+          "user-agent": "aether-weather-proxy/1.0"
+        }
+      };
+      return new Promise((resolve, reject) => {
+        const req = import_node_https.default.request(requestOptions2, (res) => {
+          const chunks = [];
+          res.on("data", (chunk) => chunks.push(chunk));
+          res.on("end", () => {
+            const raw = Buffer.concat(chunks).toString("utf8");
+            let parsed;
+            try {
+              parsed = JSON.parse(raw);
+            } catch {
+              parsed = { markets: [] };
+            }
+            sendJson(responseStream, res.statusCode ?? 200, parsed, origin);
+            resolve();
+          });
+          res.on("error", reject);
+        });
+        req.on("error", reject);
+        req.end();
+      });
+    }
+    if (!isAnthropic) {
+      rejectStream(responseStream, 404, "Unknown proxy path.");
+      return;
+    }
+    if (!ANTHROPIC_ALLOWED_METHODS.has(method)) {
       rejectStream(responseStream, 405, `Method ${method} not allowed.`);
       return;
     }

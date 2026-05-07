@@ -63,6 +63,10 @@ export class WeatherAppStack extends cdk.Stack {
       },
     });
 
+    // Reference the Kalshi secret created manually in Secrets Manager.
+    // Name: aether/kalshi-private-key  (already populated by the user)
+    const kalshiSecret = sm.Secret.fromSecretNameV2(this, 'KalshiPrivateKey', 'aether/kalshi-private-key');
+
     // ─── Lambda — streaming Anthropic proxy ───────────────────────────────────
     // Pre-built by `cd lambda/proxy && npx esbuild index.ts --bundle ...`.
     // The dist/ directory is committed and deployed as-is — no Docker needed.
@@ -76,12 +80,14 @@ export class WeatherAppStack extends cdk.Stack {
       description: 'Streaming proxy: forwards requests to Anthropic and pipes SSE back.',
       environment: {
         ANTHROPIC_SECRET_ARN: anthropicSecret.secretArn,
+        KALSHI_SECRET_ARN:    kalshiSecret.secretArn,
         // Restrict responses to our domain. GitHub Actions sets this
         // automatically during deploy via an env var override if desired.
         ALLOWED_ORIGIN: props.domainName ? `https://${props.domainName}` : '*',
       },
     });
     anthropicSecret.grantRead(proxyFn);
+    kalshiSecret.grantRead(proxyFn);
 
     // Lambda Function URL with response streaming enabled.
     const proxyUrl = proxyFn.addFunctionUrl({
@@ -153,6 +159,18 @@ export class WeatherAppStack extends cdk.Stack {
           allowedMethods:        cf.AllowedMethods.ALLOW_ALL,
           originRequestPolicy:   cf.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
           responseHeadersPolicy:  cf.ResponseHeadersPolicy.CORS_ALLOW_ALL_ORIGINS,
+        },
+        // /api/kalshi/* → same Lambda proxy (handles Kalshi market data).
+        '/api/kalshi/*': {
+          origin: new origins.HttpOrigin(lambdaOriginDomain, {
+            protocolPolicy: cf.OriginProtocolPolicy.HTTPS_ONLY,
+            originPath:     '',
+          }),
+          viewerProtocolPolicy: cf.ViewerProtocolPolicy.HTTPS_ONLY,
+          cachePolicy:          cf.CachePolicy.CACHING_DISABLED,
+          allowedMethods:       cf.AllowedMethods.ALLOW_GET_HEAD,
+          originRequestPolicy:  cf.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          responseHeadersPolicy: cf.ResponseHeadersPolicy.CORS_ALLOW_ALL_ORIGINS,
         },
       },
 
