@@ -1,5 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Dashboard } from '@/components/layout/Dashboard';
+import { MapPage } from '@/pages/MapPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,7 +17,12 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Dashboard />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/map" element={<MapPage />} />
+        </Routes>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }

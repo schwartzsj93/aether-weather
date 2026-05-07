@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Expand } from 'lucide-react';
 import { useActiveLocation, useAppStore } from '@/store/appStore';
 import { useAirQuality, useWeather } from '@/hooks/useWeather';
 import { useAlerts } from '@/hooks/useAlerts';
@@ -53,6 +55,7 @@ export function Dashboard() {
   ];
 
   const [searchOpen, setSearchOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -125,6 +128,16 @@ export function Dashboard() {
                 style={{ height: 'clamp(360px, 46vh, 580px)' }}
               >
                 <WeatherMap location={weather.data.location} units={weather.data.units} />
+
+                {/* Open-full-map button — bottom-left of the tile */}
+                <button
+                  onClick={() => navigate('/map')}
+                  className="pointer-events-auto absolute bottom-10 left-3 z-10 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-[11px] text-white/60 backdrop-blur-md transition hover:bg-black/60 hover:text-white/90"
+                  aria-label="Open full-screen map"
+                >
+                  <Expand className="h-3 w-3" />
+                  Full map
+                </button>
 
                 {/* Bottom dissolve: map fades seamlessly into the card section  */}
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28

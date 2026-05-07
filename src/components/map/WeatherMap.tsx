@@ -37,11 +37,14 @@ import type { Location, Units } from '@/types/weather';
 interface Props {
   location: Location;
   units: Units;
+  /** When true the map fills its container edge-to-edge (no card radius).
+   *  Used by the dedicated /map route. */
+  fullPage?: boolean;
 }
 
 const ZOOM_TIER_LEVELS = { global: 1.6, country: 4, state: 7, local: 11 } as const;
 
-export function WeatherMap({ location, units }: Props) {
+export function WeatherMap({ location, units, fullPage = false }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRootRef   = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<MLMap | null>(null);
@@ -277,7 +280,7 @@ export function WeatherMap({ location, units }: Props) {
   return (
     <div
       ref={mapRootRef}
-      className="relative h-full w-full overflow-hidden rounded-[var(--radius-card)]"
+      className={`relative h-full w-full overflow-hidden ${fullPage ? '' : 'rounded-[var(--radius-card)]'}`}
     >
       {/* MapLibre canvas fills the container */}
       <div ref={containerRef} className="h-full w-full" />
@@ -306,16 +309,19 @@ export function WeatherMap({ location, units }: Props) {
           Recenter
         </button>
 
-        <button
-          onClick={isFullscreen ? exitFullscreen : enterFullscreen}
-          className="flex h-8 w-8 items-center justify-center rounded-full glass-strong text-white/80 hover:text-white"
-          aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen map'}
-        >
-          {isFullscreen
-            ? <Minimize2 className="h-3.5 w-3.5" />
-            : <Maximize2 className="h-3.5 w-3.5" />
-          }
-        </button>
+        {/* Fullscreen only makes sense on the dashboard — hidden on /map */}
+        {!fullPage && (
+          <button
+            onClick={isFullscreen ? exitFullscreen : enterFullscreen}
+            className="flex h-8 w-8 items-center justify-center rounded-full glass-strong text-white/80 hover:text-white"
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen map'}
+          >
+            {isFullscreen
+              ? <Minimize2 className="h-3.5 w-3.5" />
+              : <Maximize2 className="h-3.5 w-3.5" />
+            }
+          </button>
+        )}
       </div>
 
       {/* Click-point forecast popup */}
