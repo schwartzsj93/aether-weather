@@ -1,5 +1,5 @@
 /**
- * Aether Weather — Anthropic streaming proxy
+ * Aether Weather — Anthropic streaming proxy + Kalshi market data proxy
  *
  * Receives a request from the frontend, fetches the Anthropic API key from
  * Secrets Manager (cached after the first cold start), injects it as the
@@ -7,17 +7,20 @@
  * caller — preserving all the server-sent events so the browser can still use
  * the Anthropic SDK in streaming mode.
  *
- * CloudFront routes /api/anthropic/* here; the function strips the prefix and
- * forwards to https://api.anthropic.com/v1/... intact.
+ * Also handles /api/kalshi/* by fetching from the Kalshi REST API with RSA
+ * request signing. Degrades gracefully when KALSHI_SECRET_ARN is not set.
+ *
+ * CloudFront routes /api/anthropic/* and /api/kalshi/* here.
  *
  * Security:
- *   • The API key never leaves AWS — it lives in Secrets Manager, flows
- *     through Lambda memory only, and is never returned to the client.
+ *   • API keys never leave AWS — they live in Secrets Manager, flow
+ *     through Lambda memory only, and are never returned to the client.
  *   • The Lambda Function URL is NONE auth (public), but is only reachable
  *     through CloudFront, which enforces our ALLOWED_ORIGIN restriction.
  *   • Rate limiting and WAF can be layered on CloudFront in the future.
  */
 
+import crypto from 'node:crypto';
 import https from 'node:https';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 
@@ -38,6 +41,49 @@ async function getApiKey(): Promise<string> {
 
   cachedApiKey = parsed.apiKey;
   return cachedApiKey;
+}
+
+// ─── Kalshi credentials ───────────────────────────────────────────────────────
+
+interface KalshiCredentials {
+  keyId: string;
+  privateKey: string;
+}
+
+let cachedKalshiCreds: KalshiCredentials | null | undefined = undefined; // undefined = unchecked
+
+async function getKalshiCredentials(): Promise<KalshiCredentials | null> {
+  // Already fetched (or confirmed absent) this cold start.
+  if (cachedKalshiCreds !== undefined) return cachedKalshiCreds;
+
+  const secretArn = process.env.KALSHI_SECRET_ARN;
+  if (!secretArn) {
+    cachedKalshiCreds = null;
+    return null;
+  }
+
+  try {
+    const res = await sm.send(new GetSecretValueCommand({ SecretId: secretArn }));
+    const parsed = JSON.parse(res.SecretString ?? '{}') as { keyId?: string; privateKey?: string };
+    if (!parsed.keyId || !parsed.privateKey) {
+      console.warn('[proxy] Kalshi secret missing keyId or privateKey fields.');
+      cachedKalshiCreds = null;
+      return null;
+    }
+    cachedKalshiCreds = { keyId: parsed.keyId, privateKey: parsed.privateKey };
+    return cachedKalshiCreds;
+  } catch (err) {
+    console.error('[proxy] Failed to fetch Kalshi credentials:', err);
+    cachedKalshiCreds = null;
+    return null;
+  }
+}
+
+// ─── Kalshi RSA-SHA256 request signing ────────────────────────────────────────
+
+function signKalshi(method: string, path: string, ts: string, privateKey: string): string {
+  const msg = ts + method.toUpperCase() + path;
+  return crypto.createSign('RSA-SHA256').update(msg).end().sign(privateKey, 'base64');
 }
 
 // ─── Lambda streaming runtime types ───────────────────────────────────────────
@@ -75,8 +121,9 @@ interface LambdaEvent {
 declare const awslambda: AwsLambdaGlobal;
 
 // ─── Request validation ───────────────────────────────────────────────────────
-const ALLOWED_METHODS = new Set(['POST', 'OPTIONS']);
-const ANTHROPIC_HOST  = 'api.anthropic.com';
+const ANTHROPIC_ALLOWED_METHODS = new Set(['POST', 'OPTIONS']);
+const ANTHROPIC_HOST             = 'api.anthropic.com';
+const KALSHI_HOST                = 'trading-api.kalshi.com';
 
 function rejectStream(responseStream: NodeJS.WritableStream, statusCode: number, message: string) {
   const body = JSON.stringify({ error: message });
@@ -87,19 +134,37 @@ function rejectStream(responseStream: NodeJS.WritableStream, statusCode: number,
   stream.end(body);
 }
 
+function sendJson(responseStream: NodeJS.WritableStream, statusCode: number, payload: unknown, origin: string) {
+  const body = JSON.stringify(payload);
+  const stream = awslambda.HttpResponseStream.from(responseStream, {
+    statusCode,
+    headers: {
+      'content-type':                'application/json',
+      'content-length':              String(Buffer.byteLength(body)),
+      'access-control-allow-origin': origin,
+      'cache-control':               'no-cache',
+    },
+  });
+  stream.end(body);
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 export const handler = awslambda.streamifyResponse(
   async (event: LambdaEvent, responseStream: NodeJS.WritableStream): Promise<void> => {
     const method = event.requestContext.http.method.toUpperCase();
     const origin = process.env.ALLOWED_ORIGIN ?? '*';
 
-    // Handle CORS preflight.
+    // ── Route detection ──────────────────────────────────────────────────────
+    const isKalshi    = event.rawPath.startsWith('/api/kalshi');
+    const isAnthropic = event.rawPath.startsWith('/api/anthropic');
+
+    // ── CORS preflight ───────────────────────────────────────────────────────
     if (method === 'OPTIONS') {
       const stream = awslambda.HttpResponseStream.from(responseStream, {
         statusCode: 204,
         headers: {
           'access-control-allow-origin':  origin,
-          'access-control-allow-methods': 'POST, OPTIONS',
+          'access-control-allow-methods': 'GET, POST, OPTIONS',
           'access-control-allow-headers': 'content-type, anthropic-version, anthropic-beta, x-request-id',
           'access-control-max-age':       '86400',
         },
@@ -108,14 +173,74 @@ export const handler = awslambda.streamifyResponse(
       return;
     }
 
-    if (!ALLOWED_METHODS.has(method)) {
+    // ── Kalshi market data (GET only, read-only) ──────────────────────────────
+    if (isKalshi) {
+      if (method !== 'GET') {
+        rejectStream(responseStream, 405, 'Only GET is supported for Kalshi market data.');
+        return;
+      }
+
+      const creds = await getKalshiCredentials();
+
+      if (!creds) {
+        // Graceful degradation — Kalshi not configured.
+        sendJson(responseStream, 200, { markets: [] }, origin);
+        return;
+      }
+
+      // Strip /api/kalshi prefix → forward to trading-api.kalshi.com
+      const kalshiPath = event.rawPath.replace(/^\/api\/kalshi/, '') || '/trade-api/v2/markets';
+      const query      = event.rawQueryString ? `?${event.rawQueryString}` : '';
+      const fullPath   = kalshiPath + query;
+
+      const ts        = String(Date.now());
+      const signature = signKalshi('GET', kalshiPath, ts, creds.privateKey);
+
+      const requestOptions: https.RequestOptions = {
+        hostname: KALSHI_HOST,
+        path:     fullPath,
+        method:   'GET',
+        headers: {
+          'kalshi-access-key':       creds.keyId,
+          'kalshi-access-signature': signature,
+          'kalshi-access-timestamp': ts,
+          'content-type':            'application/json',
+          'user-agent':              'aether-weather-proxy/1.0',
+        },
+      };
+
+      return new Promise<void>((resolve, reject) => {
+        const req = https.request(requestOptions, (res) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('end', () => {
+            const raw = Buffer.concat(chunks).toString('utf8');
+            let parsed: unknown;
+            try { parsed = JSON.parse(raw); } catch { parsed = { markets: [] }; }
+            sendJson(responseStream, res.statusCode ?? 200, parsed, origin);
+            resolve();
+          });
+          res.on('error', reject);
+        });
+        req.on('error', reject);
+        req.end();
+      });
+    }
+
+    // ── Anthropic streaming proxy ─────────────────────────────────────────────
+    if (!isAnthropic) {
+      rejectStream(responseStream, 404, 'Unknown proxy path.');
+      return;
+    }
+
+    if (!ANTHROPIC_ALLOWED_METHODS.has(method)) {
       rejectStream(responseStream, 405, `Method ${method} not allowed.`);
       return;
     }
 
     // Strip our proxy prefix: /api/anthropic/v1/messages → /v1/messages
     const anthropicPath = event.rawPath.replace(/^\/api\/anthropic/, '') || '/v1/messages';
-    const query = event.rawQueryString ? `?${event.rawQueryString}` : '';
+    const query         = event.rawQueryString ? `?${event.rawQueryString}` : '';
 
     let apiKey: string;
     try {

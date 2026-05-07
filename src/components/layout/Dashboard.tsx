@@ -20,6 +20,8 @@ import { AlertsBanner } from '@/components/weather/AlertsBanner';
 import { EnsembleInsights } from '@/components/weather/EnsembleInsights';
 import { WeatherMap } from '@/components/map/WeatherMap';
 import { VoiceAgent } from '@/components/voice/VoiceAgent';
+import { WeatherChat } from '@/components/chat/WeatherChat';
+import { ChatButton } from '@/components/chat/ChatButton';
 
 /** Staggered fade-up reveal wrapper used for every card below the hero map. */
 function CardReveal({ delay = 0, className = '', children }: {
@@ -55,6 +57,7 @@ export function Dashboard() {
   ];
 
   const [searchOpen, setSearchOpen] = useState(false);
+  const [chatOpen,   setChatOpen]   = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -220,6 +223,21 @@ export function Dashboard() {
 
       {/* Bond voice agent — always mounted, receives bundle when ready */}
       <VoiceAgent bundle={weather.data ?? null} />
+
+      {/* Weather chat panel — slide-out from right */}
+      <AnimatePresence>
+        {chatOpen && (
+          <WeatherChat
+            bundle={weather.data ?? null}
+            onClose={() => setChatOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Chat open button — bottom-left floating pill */}
+      <div className="pointer-events-none fixed bottom-6 left-6 z-[200]">
+        <ChatButton onClick={() => setChatOpen(true)} />
+      </div>
     </div>
   );
 }
