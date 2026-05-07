@@ -191,14 +191,9 @@ export async function streamBriefing(bundle: WeatherBundle, opts: BriefingOption
     {
       model,
       max_tokens: 600,
-      // Brief, creative prose — keep effort low for speed/cost.
-      // Using `output_config.effort` (GA, no beta header) on Opus/Sonnet 4.6.
-      output_config: { effort: 'low' as const } as never,
-      system: [
-        { type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
-      ],
+      system: SYSTEM,
       messages: [{ role: 'user', content: userMessage }],
-    } as never,
+    },
     { signal: opts.signal }
   );
 
