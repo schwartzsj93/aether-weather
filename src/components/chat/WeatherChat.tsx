@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Send, Paperclip, FileText, ImageIcon } from 'lucide-react';
+import { X, Send, Paperclip, FileText } from 'lucide-react';
 import type { WeatherBundle } from '@/types/weather';
 import { fetchWeatherMarkets, type KalshiMarket } from '@/lib/api/kalshi';
 import { streamWeatherChat, type ChatMessage, type AttachmentBlock } from '@/lib/ai/weatherChat';
@@ -422,32 +422,37 @@ export function WeatherChat({ bundle, onClose }: Props) {
           </div>
         )}
 
+        {/* File input — label association is the most reliable cross-browser way
+            to open the picker. The input itself is visually hidden but accessible. */}
+        <input
+          id="chat-file-input"
+          ref={fileRef}
+          type="file"
+          multiple
+          accept="image/jpeg,image/png,image/gif,image/webp,text/plain,text/markdown,text/csv,application/json,.md,.csv,.json"
+          className="sr-only"
+          onChange={handleFiles}
+        />
+
+        {/* Attach button row — sits above the text input, clearly labelled */}
+        <label
+          htmlFor="chat-file-input"
+          className={`mb-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl py-2 text-[12px] font-medium transition-colors ${
+            !bundle || loading
+              ? 'pointer-events-none opacity-30 text-white/40'
+              : 'text-sky-400 hover:text-sky-300'
+          }`}
+          style={{ border: '1px dashed rgba(125,211,252,0.25)', background: 'rgba(125,211,252,0.04)' }}
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+          Attach photo or file
+        </label>
+
         {/* Textarea row */}
         <div
           className="flex items-end gap-2 rounded-2xl px-3 py-2"
           style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
         >
-          {/* Hidden file input */}
-          <input
-            ref={fileRef}
-            type="file"
-            multiple
-            accept="image/jpeg,image/png,image/gif,image/webp,text/plain,text/markdown,text/csv,application/json,.md,.csv,.json"
-            className="hidden"
-            onChange={handleFiles}
-          />
-
-          {/* Paperclip / attach button */}
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={!bundle || loading}
-            className="mb-0.5 shrink-0 rounded-full p-1.5 text-white/35 transition-all hover:bg-white/8 hover:text-white/70 disabled:pointer-events-none disabled:opacity-25"
-            aria-label="Attach file or image"
-            title="Attach image or file"
-          >
-            <Paperclip className="h-4 w-4" />
-          </button>
-
           <textarea
             ref={textaRef}
             value={draft}
@@ -471,7 +476,7 @@ export function WeatherChat({ bundle, onClose }: Props) {
         </div>
 
         <p className="mt-1.5 text-center text-[10px] text-white/20">
-          Enter to send · Shift+Enter for newline · <ImageIcon className="mb-px inline h-2.5 w-2.5" /> images &amp; files supported
+          Enter to send · Shift+Enter for newline
         </p>
       </div>
     </motion.div>
