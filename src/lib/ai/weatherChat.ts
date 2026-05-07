@@ -3,6 +3,9 @@
  *
  * Separate from the Bond voice agent: text-only, multi-turn, analyst persona.
  * Uses the same Anthropic proxy pattern as llmSummarize.ts.
+ *
+ * Supports multimodal messages: images are passed as vision blocks,
+ * text/CSV/JSON files are appended as additional text blocks.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -10,11 +13,27 @@ import type { WeatherBundle } from '@/types/weather';
 import type { KalshiMarket } from '@/lib/api/kalshi';
 import { getCondition } from '@/lib/utils/weatherCodes';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Attachment types ──────────────────────────────────────────────────────────
+
+export type AttachmentBlock =
+  | {
+      type: 'image';
+      data: string;                         // base64, no data-URL prefix
+      mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+      name: string;
+    }
+  | {
+      type: 'text';
+      text: string;
+      name: string;
+    };
+
+// ── Chat message type ─────────────────────────────────────────────────────────
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  attachments?: AttachmentBlock[];          // user messages only
 }
 
 export interface ChatOptions {
@@ -22,6 +41,7 @@ export interface ChatOptions {
   markets: KalshiMarket[];
   history: ChatMessage[];
   userMessage: string;
+  attachments?: AttachmentBlock[];
   signal?: AbortSignal;
   onDelta: (chunk: string, total: string) => void;
 }
@@ -54,6 +74,8 @@ Your role:
 - When Kalshi market data is available, interpret the odds (e.g. "72 cents = 72% market-implied probability").
 - If the [KALSHI MARKETS] block is empty, mention that no market data is currently available.
 - Compare model forecasts with market-implied probabilities when both are relevant.
+- If the user uploads an image, describe what you see and relate it to the weather context where relevant.
+- If the user uploads a file, acknowledge its contents and incorporate them into your analysis.
 - Use bullet points for lists of conditions, times, or comparisons.
 - Reference specific numbers from the data — never fabricate values.
 - Keep responses under ~150 words unless the user explicitly requests more detail.
@@ -88,7 +110,6 @@ function buildDigest(bundle: WeatherBundle) {
       day: 'numeric',
     });
 
-  // Rain windows: hourly precip probability > 20% in next 24 h
   const rainWindows = hourly
     .slice(0, 24)
     .filter((h) => h.precipitationProbability > 20)
@@ -133,10 +154,44 @@ function buildDigest(bundle: WeatherBundle) {
   };
 }
 
+// ── Content block builder ─────────────────────────────────────────────────────
+
+type ApiContentBlock = Anthropic.TextBlockParam | Anthropic.ImageBlockParam;
+
+function buildContent(
+  text: string,
+  attachments?: AttachmentBlock[],
+): string | ApiContentBlock[] {
+  if (!attachments || attachments.length === 0) return text;
+
+  const blocks: ApiContentBlock[] = [{ type: 'text', text }];
+
+  for (const att of attachments) {
+    if (att.type === 'image') {
+      blocks.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: att.mediaType,
+          data: att.data,
+        },
+      });
+    } else {
+      // Plain text / CSV / JSON — append as a labelled text block.
+      blocks.push({
+        type: 'text',
+        text: `[Attached file: ${att.name}]\n${att.text}`,
+      });
+    }
+  }
+
+  return blocks;
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export async function streamWeatherChat(opts: ChatOptions): Promise<string> {
-  const { bundle, markets, history, userMessage, signal, onDelta } = opts;
+  const { bundle, markets, history, userMessage, attachments, signal, onDelta } = opts;
 
   const client = getClient();
   const model  = (import.meta.env.VITE_ANTHROPIC_MODEL as string | undefined) ?? 'claude-haiku-4-5';
@@ -144,21 +199,31 @@ export async function streamWeatherChat(opts: ChatOptions): Promise<string> {
   const weatherDigest = buildDigest(bundle);
   const marketsJSON   = markets.length > 0 ? JSON.stringify(markets, null, 2) : '[]';
 
-  // Compose the user turn with embedded context blocks.
-  const contextualUserMessage = [
+  // Current user message: weather context prepended only to the live turn.
+  const contextualText = [
     '[WEATHER DATA]',
     JSON.stringify(weatherDigest),
     '',
     '[KALSHI MARKETS]',
     marketsJSON,
     '',
-    userMessage,
+    userMessage || '(See attached files)',
   ].join('\n');
 
-  // Build messages array: history + current user turn.
-  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
-    ...history,
-    { role: 'user', content: contextualUserMessage },
+  // Build the full messages array for the API.
+  const messages: Anthropic.MessageParam[] = [
+    // History messages — preserve their attachments as content blocks.
+    ...history.map((msg): Anthropic.MessageParam => ({
+      role: msg.role,
+      content: msg.attachments?.length
+        ? buildContent(msg.content, msg.attachments)
+        : msg.content,
+    })),
+    // Current user turn with weather context + any new attachments.
+    {
+      role: 'user',
+      content: buildContent(contextualText, attachments),
+    },
   ];
 
   let total = '';
