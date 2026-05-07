@@ -8,8 +8,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      // selfDestroying unregisters any previously installed service worker and
+      // clears its caches — fixing stale-SW "offline" issues for existing users.
+      // The manifest is kept so the app remains installable, but no SW is
+      // registered going forward (live data apps don't benefit from SW caching).
+      selfDestroying: true,
       manifest: {
         name: 'Aether Weather',
         short_name: 'Aether',
@@ -23,42 +26,6 @@ export default defineConfig({
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
           { src: '/icon-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-        ],
-      },
-      workbox: {
-        // Activate the new SW immediately — don't wait for old tabs to close.
-        // Without this the browser keeps running the previous bundle even after
-        // a successful deploy, because the old SW stays in control until every
-        // tab is closed.  With skipWaiting + clientsClaim the new SW takes over
-        // on the next page load (the page is reloaded automatically by autoUpdate).
-        skipWaiting: true,
-        clientsClaim: true,
-        // Cache weather + tile responses with a stale-while-revalidate strategy.
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'open-meteo-cache',
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 30 },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/.*\.rainviewer\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'radar-tiles',
-              expiration: { maxEntries: 1000, maxAgeSeconds: 60 * 60 * 2 },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/.*\.basemaps\.cartocdn\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'basemap-tiles',
-              expiration: { maxEntries: 2000, maxAgeSeconds: 60 * 60 * 24 * 7 },
-            },
-          },
         ],
       },
     }),
