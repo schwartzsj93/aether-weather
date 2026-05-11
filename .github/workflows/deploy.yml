@@ -76,40 +76,13 @@ jobs:
             --distribution-id ${{ secrets.CF_DISTRIBUTION_ID }} \
             --paths "/*"
 
-  # ── Deploy CDK infra changes ───────────────────────────────────────────────
-  # Runs on every push (CDK is idempotent — no-op when nothing changed).
-  # A conditional was attempted but GitHub Actions evaluates contains() on the
-  # modified-files array as exact-element matching, so path prefix checks never
-  # fired. Unconditional is simpler and ~3 min overhead is acceptable.
-  deploy-infra:
-    name: Deploy CDK Infrastructure
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-
-      - name: Install infrastructure deps
-        run: cd infrastructure && npm ci
-
-      - name: Install lambda deps
-        run: cd lambda/proxy && npm ci
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: us-east-1
-
-      - name: CDK Deploy
-        run: cd infrastructure && npm run deploy
-        env:
-          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
-          GITHUB_OWNER: ${{ github.repository_owner }}
-          GITHUB_REPO: ${{ github.event.repository.name }}
+  # ── CDK infra deploy ───────────────────────────────────────────────────────
+  # The GitHub deploy role is scoped to S3 + CloudFront only.  Full CDK
+  # deployments (Lambda env vars, new behaviors, etc.) must be run locally:
+  #
+  #   cd infrastructure
+  #   GITHUB_OWNER=schwartzsj93 GITHUB_REPO=aether-weather \
+  #     npx cdk deploy --all --require-approval never
+  #
+  # If you add this role the CDK bootstrap permissions in the future you can
+  # re-enable this job by restoring the steps below and removing this comment.
