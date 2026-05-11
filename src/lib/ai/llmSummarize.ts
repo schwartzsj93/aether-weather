@@ -173,7 +173,7 @@ export async function streamBriefing(bundle: WeatherBundle, opts: BriefingOption
   const c = getClient();
   if (!c) throw new Error('LLM disabled — set VITE_ANTHROPIC_API_KEY and VITE_LLM_PROVIDER=anthropic.');
 
-  const model = (import.meta.env.VITE_ANTHROPIC_MODEL as string | undefined) ?? 'claude-opus-4-6';
+  const model = (import.meta.env.VITE_ANTHROPIC_MODEL as string | undefined) ?? 'claude-opus-4-5';
   const data = digest(bundle);
   const userMessage = [
     TONE_GUIDE[opts.tone],

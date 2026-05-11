@@ -63,7 +63,7 @@ function mapMarket(raw: KalshiRawMarket): KalshiMarket {
 
 export async function fetchWeatherMarkets(signal?: AbortSignal): Promise<KalshiMarket[]> {
   try {
-    const url = '/api/kalshi/markets?limit=50&status=open&category=weather';
+    const url = '/api/kalshi/trade-api/v2/markets?limit=50&status=open&category=weather';
     const res = await fetch(url, { signal });
 
     if (!res.ok) {

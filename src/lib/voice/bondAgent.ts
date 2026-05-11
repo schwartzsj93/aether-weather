@@ -173,7 +173,11 @@ function client(): Anthropic {
 
 // ── Main entry point ──────────────────────────────────────────────────────────
 
-const VOICE_MODEL = 'claude-sonnet-4-5'; // fast, sharp — ideal for real-time voice
+// Prefer the app-wide model override; fall back to claude-sonnet-4-5 which is
+// faster than Opus for real-time conversational responses.
+const VOICE_MODEL =
+  (import.meta.env.VITE_ANTHROPIC_MODEL as string | undefined)?.trim() ??
+  'claude-sonnet-4-5';
 
 export async function askBond(
   userTranscript: string,
