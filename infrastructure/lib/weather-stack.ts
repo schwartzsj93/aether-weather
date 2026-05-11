@@ -80,7 +80,11 @@ export class WeatherAppStack extends cdk.Stack {
       description: 'Streaming proxy: forwards requests to Anthropic and pipes SSE back.',
       environment: {
         ANTHROPIC_SECRET_ARN: anthropicSecret.secretArn,
-        KALSHI_SECRET_ARN:    'aether/kalshi-private-key', // pass name, not .secretArn — fromSecretNameV2 omits the random suffix so the ARN fails GetSecretValue
+        // Pass the secret NAME, not .secretArn. fromSecretNameV2 synthesises an
+        // ARN without the random 6-char suffix Secrets Manager appends, so
+        // GetSecretValue({ SecretId: partialArn }) fails every cold start.
+        // Using the name directly always resolves correctly.
+        KALSHI_SECRET_ARN:    'aether/kalshi-private-key',
         // Restrict responses to our domain. GitHub Actions sets this
         // automatically during deploy via an env var override if desired.
         ALLOWED_ORIGIN: props.domainName ? `https://${props.domainName}` : '*',

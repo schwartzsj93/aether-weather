@@ -82,10 +82,17 @@ jobs:
   deploy-infra:
     name: Deploy CDK Infrastructure
     runs-on: ubuntu-latest
-    # Only deploy infra when infrastructure or lambda code changes
+    # Only deploy infra when infrastructure or lambda code changes.
+    # Use join() because github.event.head_commit.modified is an array of full
+    # paths; contains(array, 'infrastructure/') does exact-element matching and
+    # never matches. Joining to a space-delimited string lets us do substring
+    # checks. Also allow manual workflow_dispatch to force a CDK deploy.
     if: |
-      contains(github.event.head_commit.modified, 'infrastructure/') ||
-      contains(github.event.head_commit.modified, 'lambda/')
+      github.event_name == 'workflow_dispatch' ||
+      contains(join(github.event.head_commit.modified, ' '), 'infrastructure/') ||
+      contains(join(github.event.head_commit.modified, ' '), 'lambda/') ||
+      contains(join(github.event.head_commit.added,    ' '), 'infrastructure/') ||
+      contains(join(github.event.head_commit.added,    ' '), 'lambda/')
 
     steps:
       - name: Checkout
