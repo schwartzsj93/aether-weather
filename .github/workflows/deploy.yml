@@ -76,23 +76,14 @@ jobs:
             --distribution-id ${{ secrets.CF_DISTRIBUTION_ID }} \
             --paths "/*"
 
-  # ── (Optional) Deploy CDK infra changes ────────────────────────────────────
-  # Only runs when infrastructure/ or lambda/ files change. On a first setup
-  # you run `cdk deploy` locally once; this job keeps the Lambda code in sync.
+  # ── Deploy CDK infra changes ───────────────────────────────────────────────
+  # Runs on every push (CDK is idempotent — no-op when nothing changed).
+  # A conditional was attempted but GitHub Actions evaluates contains() on the
+  # modified-files array as exact-element matching, so path prefix checks never
+  # fired. Unconditional is simpler and ~3 min overhead is acceptable.
   deploy-infra:
     name: Deploy CDK Infrastructure
     runs-on: ubuntu-latest
-    # Only deploy infra when infrastructure or lambda code changes.
-    # Use join() because github.event.head_commit.modified is an array of full
-    # paths; contains(array, 'infrastructure/') does exact-element matching and
-    # never matches. Joining to a space-delimited string lets us do substring
-    # checks. Also allow manual workflow_dispatch to force a CDK deploy.
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      contains(join(github.event.head_commit.modified, ' '), 'infrastructure/') ||
-      contains(join(github.event.head_commit.modified, ' '), 'lambda/') ||
-      contains(join(github.event.head_commit.added,    ' '), 'infrastructure/') ||
-      contains(join(github.event.head_commit.added,    ' '), 'lambda/')
 
     steps:
       - name: Checkout
