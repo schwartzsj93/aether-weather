@@ -180,51 +180,71 @@ export const handler = awslambda.streamifyResponse(
         return;
       }
 
-      const creds = await getKalshiCredentials();
+      // Wrap the entire Kalshi flow so any signing / network error degrades
+      // gracefully to an empty markets list instead of a 502.
+      try {
+        const creds = await getKalshiCredentials();
 
-      if (!creds) {
-        // Graceful degradation — Kalshi not configured.
-        sendJson(responseStream, 200, { markets: [] }, origin);
-        return;
-      }
+        if (!creds) {
+          // Graceful degradation — Kalshi not configured.
+          sendJson(responseStream, 200, { markets: [] }, origin);
+          return;
+        }
 
-      // Strip /api/kalshi prefix → forward to trading-api.kalshi.com
-      const kalshiPath = event.rawPath.replace(/^\/api\/kalshi/, '') || '/trade-api/v2/markets';
-      const query      = event.rawQueryString ? `?${event.rawQueryString}` : '';
-      const fullPath   = kalshiPath + query;
+        // Strip /api/kalshi prefix → forward to trading-api.kalshi.com
+        const kalshiPath = event.rawPath.replace(/^\/api\/kalshi/, '') || '/trade-api/v2/markets';
+        const query      = event.rawQueryString ? `?${event.rawQueryString}` : '';
+        const fullPath   = kalshiPath + query;
 
-      const ts        = String(Date.now());
-      const signature = signKalshi('GET', kalshiPath, ts, creds.privateKey);
+        const ts = String(Date.now());
 
-      const requestOptions: https.RequestOptions = {
-        hostname: KALSHI_HOST,
-        path:     fullPath,
-        method:   'GET',
-        headers: {
-          'kalshi-access-key':       creds.keyId,
-          'kalshi-access-signature': signature,
-          'kalshi-access-timestamp': ts,
-          'content-type':            'application/json',
-          'user-agent':              'aether-weather-proxy/1.0',
-        },
-      };
+        // Normalise the private key to PEM format. The key stored in Secrets
+        // Manager may be raw base64 (no headers) or a full PEM string. Node's
+        // crypto.createSign requires proper PEM headers — add them if absent.
+        let privateKey = creds.privateKey.trim();
+        if (!privateKey.startsWith('-----')) {
+          // Strip any whitespace / newlines that got into the base64 blob, then
+          // wrap in PKCS#1 headers so Node's crypto stack can parse it.
+          const b64 = privateKey.replace(/\s+/g, '');
+          privateKey = `-----BEGIN RSA PRIVATE KEY-----\n${b64}\n-----END RSA PRIVATE KEY-----`;
+        }
 
-      return new Promise<void>((resolve, reject) => {
-        const req = https.request(requestOptions, (res) => {
-          const chunks: Buffer[] = [];
-          res.on('data', (chunk: Buffer) => chunks.push(chunk));
-          res.on('end', () => {
-            const raw = Buffer.concat(chunks).toString('utf8');
-            let parsed: unknown;
-            try { parsed = JSON.parse(raw); } catch { parsed = { markets: [] }; }
-            sendJson(responseStream, res.statusCode ?? 200, parsed, origin);
-            resolve();
+        const signature = signKalshi('GET', kalshiPath, ts, privateKey);
+
+        const requestOptions: https.RequestOptions = {
+          hostname: KALSHI_HOST,
+          path:     fullPath,
+          method:   'GET',
+          headers: {
+            'kalshi-access-key':       creds.keyId,
+            'kalshi-access-signature': signature,
+            'kalshi-access-timestamp': ts,
+            'content-type':            'application/json',
+            'user-agent':              'aether-weather-proxy/1.0',
+          },
+        };
+
+        await new Promise<void>((resolve, reject) => {
+          const req = https.request(requestOptions, (res) => {
+            const chunks: Buffer[] = [];
+            res.on('data', (chunk: Buffer) => chunks.push(chunk));
+            res.on('end', () => {
+              const raw = Buffer.concat(chunks).toString('utf8');
+              let parsed: unknown;
+              try { parsed = JSON.parse(raw); } catch { parsed = { markets: [] }; }
+              sendJson(responseStream, res.statusCode ?? 200, parsed, origin);
+              resolve();
+            });
+            res.on('error', reject);
           });
-          res.on('error', reject);
+          req.on('error', reject);
+          req.end();
         });
-        req.on('error', reject);
-        req.end();
-      });
+      } catch (err) {
+        console.error('[proxy] Kalshi handler error:', err);
+        sendJson(responseStream, 200, { markets: [] }, origin);
+      }
+      return;
     }
 
     // ── Anthropic streaming proxy ─────────────────────────────────────────────

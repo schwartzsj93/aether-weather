@@ -25154,48 +25154,61 @@ var handler = awslambda.streamifyResponse(
         rejectStream(responseStream, 405, "Only GET is supported for Kalshi market data.");
         return;
       }
-      const creds = await getKalshiCredentials();
-      if (!creds) {
-        sendJson(responseStream, 200, { markets: [] }, origin);
-        return;
-      }
-      const kalshiPath = event.rawPath.replace(/^\/api\/kalshi/, "") || "/trade-api/v2/markets";
-      const query2 = event.rawQueryString ? `?${event.rawQueryString}` : "";
-      const fullPath = kalshiPath + query2;
-      const ts = String(Date.now());
-      const signature = signKalshi("GET", kalshiPath, ts, creds.privateKey);
-      const requestOptions2 = {
-        hostname: KALSHI_HOST,
-        path: fullPath,
-        method: "GET",
-        headers: {
-          "kalshi-access-key": creds.keyId,
-          "kalshi-access-signature": signature,
-          "kalshi-access-timestamp": ts,
-          "content-type": "application/json",
-          "user-agent": "aether-weather-proxy/1.0"
+      try {
+        const creds = await getKalshiCredentials();
+        if (!creds) {
+          sendJson(responseStream, 200, { markets: [] }, origin);
+          return;
         }
-      };
-      return new Promise((resolve, reject) => {
-        const req = import_node_https.default.request(requestOptions2, (res) => {
-          const chunks = [];
-          res.on("data", (chunk) => chunks.push(chunk));
-          res.on("end", () => {
-            const raw = Buffer.concat(chunks).toString("utf8");
-            let parsed;
-            try {
-              parsed = JSON.parse(raw);
-            } catch {
-              parsed = { markets: [] };
-            }
-            sendJson(responseStream, res.statusCode ?? 200, parsed, origin);
-            resolve();
+        const kalshiPath = event.rawPath.replace(/^\/api\/kalshi/, "") || "/trade-api/v2/markets";
+        const query2 = event.rawQueryString ? `?${event.rawQueryString}` : "";
+        const fullPath = kalshiPath + query2;
+        const ts = String(Date.now());
+        let privateKey = creds.privateKey.trim();
+        if (!privateKey.startsWith("-----")) {
+          const b64 = privateKey.replace(/\s+/g, "");
+          privateKey = `-----BEGIN RSA PRIVATE KEY-----
+${b64}
+-----END RSA PRIVATE KEY-----`;
+        }
+        const signature = signKalshi("GET", kalshiPath, ts, privateKey);
+        const requestOptions2 = {
+          hostname: KALSHI_HOST,
+          path: fullPath,
+          method: "GET",
+          headers: {
+            "kalshi-access-key": creds.keyId,
+            "kalshi-access-signature": signature,
+            "kalshi-access-timestamp": ts,
+            "content-type": "application/json",
+            "user-agent": "aether-weather-proxy/1.0"
+          }
+        };
+        await new Promise((resolve, reject) => {
+          const req = import_node_https.default.request(requestOptions2, (res) => {
+            const chunks = [];
+            res.on("data", (chunk) => chunks.push(chunk));
+            res.on("end", () => {
+              const raw = Buffer.concat(chunks).toString("utf8");
+              let parsed;
+              try {
+                parsed = JSON.parse(raw);
+              } catch {
+                parsed = { markets: [] };
+              }
+              sendJson(responseStream, res.statusCode ?? 200, parsed, origin);
+              resolve();
+            });
+            res.on("error", reject);
           });
-          res.on("error", reject);
+          req.on("error", reject);
+          req.end();
         });
-        req.on("error", reject);
-        req.end();
-      });
+      } catch (err) {
+        console.error("[proxy] Kalshi handler error:", err);
+        sendJson(responseStream, 200, { markets: [] }, origin);
+      }
+      return;
     }
     if (!isAnthropic) {
       rejectStream(responseStream, 404, "Unknown proxy path.");
