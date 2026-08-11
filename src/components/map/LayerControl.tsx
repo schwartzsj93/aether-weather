@@ -31,6 +31,7 @@ export function LayerControl() {
 
   return (
     <div className="flex flex-col gap-3 glass-strong rounded-2xl p-3">
+      {/* ── Layer tabs — visible on all screen sizes ─────────────────────── */}
       <Tabs.Root value={layer} onValueChange={(v) => setLayer(v as MapLayer)}>
         <Tabs.List className="flex items-center gap-1 rounded-xl bg-black/30 p-1">
           {LAYERS.map((l) => (
@@ -43,13 +44,15 @@ export function LayerControl() {
               )}
             >
               {l.icon}
-              <span className="hidden sm:inline">{l.label}</span>
+              {/* Label always visible — tabs are the only control on mobile */}
+              <span>{l.label}</span>
             </Tabs.Trigger>
           ))}
         </Tabs.List>
       </Tabs.Root>
 
-      <div className="flex items-center gap-2">
+      {/* ── Zoom tiers — desktop only; mobile users pinch to zoom ────────── */}
+      <div className="hidden sm:flex items-center gap-2">
         {TIERS.map((t) => (
           <button
             key={t.key}
@@ -60,17 +63,16 @@ export function LayerControl() {
             )}
             title={t.label}
           >
-            {t.icon}
-            <span className="hidden sm:inline">{t.label}</span>
+            {t.icon}{t.label}
           </button>
         ))}
       </div>
 
-      {/* Lightning overlay toggle — works on any base layer */}
+      {/* ── Lightning overlay toggle — desktop only ──────────────────────── */}
       <button
         onClick={toggleLightning}
         className={cn(
-          'flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-[11px] uppercase tracking-wider transition',
+          'hidden sm:flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-[11px] uppercase tracking-wider transition',
           lightning
             ? 'bg-yellow-400/15 text-yellow-200'
             : 'text-white/50 hover:text-white/80',
@@ -85,7 +87,8 @@ export function LayerControl() {
         )} />
       </button>
 
-      <div className="px-1">
+      {/* ── Opacity slider — desktop only ────────────────────────────────── */}
+      <div className="hidden sm:block px-1">
         <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-widest text-white/50">
           <span>Layer opacity</span>
           <span>{Math.round(opacity * 100)}%</span>
