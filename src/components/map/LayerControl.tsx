@@ -58,8 +58,10 @@ export function LayerControl() {
               'flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] uppercase tracking-wider transition',
               tier === t.key ? 'bg-white/12 text-white' : 'text-white/55 hover:text-white'
             )}
+            title={t.label}
           >
-            {t.icon}{t.label}
+            {t.icon}
+            <span className="hidden sm:inline">{t.label}</span>
           </button>
         ))}
       </div>

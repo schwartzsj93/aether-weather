@@ -296,8 +296,8 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
       {/* Vignette gradient */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/55" />
 
-      {/* Layer control — top-left */}
-      <div className="pointer-events-auto absolute left-3 top-3 z-10 w-[min(92%,360px)]">
+      {/* Layer control — top-left; narrower on mobile so more map shows through */}
+      <div className="pointer-events-auto absolute left-3 top-3 z-10 w-[min(88%,240px)] sm:w-[min(92%,360px)]">
         <LayerControl />
       </div>
 

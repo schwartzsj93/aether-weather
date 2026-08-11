@@ -129,7 +129,7 @@ export function Dashboard() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
                 className="relative overflow-hidden rounded-[var(--radius-card)]"
-                style={{ height: 'clamp(360px, 46vh, 580px)' }}
+                style={{ height: 'clamp(180px, min(62vw, 46vh), 580px)' }}
               >
                 <WeatherMap location={weather.data.location} units={weather.data.units} />
 
