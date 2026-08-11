@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Wind, Droplets, Gauge, Eye, Sun as SunIcon } from 'lucide-react';
+import { Wind, Droplets, Gauge, Eye, Sun as SunIcon, Share2 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { WeatherIcon } from '@/components/ui/WeatherIcon';
+import { ShareWeatherCard } from '@/components/ui/ShareWeatherCard';
 import {
   bearingToCompass,
   formatDistance,
@@ -22,8 +24,10 @@ export function CurrentConditions({ bundle }: Props) {
   const { current, location, units } = bundle;
   const cond = getCondition(current.weatherCode);
   const icon = current.isDay ? cond.icon : nightVariant(cond.icon);
+  const [shareOpen, setShareOpen] = useState(false);
 
   return (
+    <>
     <GlassCard intense className="p-7 lg:p-9">
       <div className="flex items-start justify-between gap-6">
         <div>
@@ -31,6 +35,13 @@ export function CurrentConditions({ bundle }: Props) {
             <span>{location.name}</span>
             {location.admin1 && <span className="text-white/30">·</span>}
             <span className="text-white/45">{location.admin1 ?? location.country}</span>
+            <button
+              onClick={() => setShareOpen(true)}
+              className="ml-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/8 text-white/40 transition hover:bg-white/15 hover:text-white/80"
+              title="Share weather card"
+            >
+              <Share2 className="h-3 w-3" />
+            </button>
           </div>
           <div className="mt-1 flex items-baseline gap-3">
             <motion.div
@@ -72,6 +83,8 @@ export function CurrentConditions({ bundle }: Props) {
               hint={<span className="inline-flex items-center gap-1"><SunIcon className="h-3 w-3" />UV {Math.round(current.uvIndex)}</span>} />
       </div>
     </GlassCard>
+    <ShareWeatherCard open={shareOpen} onClose={() => setShareOpen(false)} bundle={bundle} />
+    </>
   );
 }
 

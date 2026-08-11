@@ -1,5 +1,6 @@
-import { Plus, X } from 'lucide-react';
+import { Plus, X, LocateFixed } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
+import { useGeolocation } from '@/hooks/useGeolocation';
 import { cn } from '@/lib/utils/cn';
 
 interface Props {
@@ -11,6 +12,7 @@ export function LocationStrip({ onSearch }: Props) {
   const active = useAppStore((s) => s.activeLocationId);
   const setActive = useAppStore((s) => s.setActiveLocation);
   const remove = useAppStore((s) => s.removeLocation);
+  const { loading: gpsLoading, request: requestGps } = useGeolocation();
 
   return (
     <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
@@ -43,6 +45,18 @@ export function LocationStrip({ onSearch }: Props) {
         className="flex items-center gap-1 rounded-full border border-dashed border-white/15 px-3 py-1.5 text-sm text-white/65 hover:border-white/30 hover:text-white"
       >
         <Plus className="h-3.5 w-3.5" /> Add
+      </button>
+      <button
+        onClick={requestGps}
+        disabled={gpsLoading}
+        title="Use my current location"
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-white/15 text-white/65 hover:border-sky-300/50 hover:text-sky-300 disabled:opacity-40"
+        aria-label="Use current location"
+      >
+        {gpsLoading
+          ? <span className="h-3.5 w-3.5 animate-spin rounded-full border border-white/30 border-t-sky-300" />
+          : <LocateFixed className="h-3.5 w-3.5" />
+        }
       </button>
     </div>
   );

@@ -1,6 +1,6 @@
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Slider from '@radix-ui/react-slider';
-import { Globe2, Layers, Map as MapIcon, Radar, Satellite, Wind } from 'lucide-react';
+import { Globe2, Layers, Map as MapIcon, Radar, Satellite, Wind, Zap } from 'lucide-react';
 import { useAppStore, type MapLayer, type MapZoomTier } from '@/store/appStore';
 import { cn } from '@/lib/utils/cn';
 
@@ -20,12 +20,14 @@ const TIERS: { key: MapZoomTier; label: string; icon: React.ReactNode }[] = [
 ];
 
 export function LayerControl() {
-  const layer = useAppStore((s) => s.activeLayer);
-  const tier = useAppStore((s) => s.zoomTier);
-  const opacity = useAppStore((s) => s.radarOpacity);
+  const layer    = useAppStore((s) => s.activeLayer);
+  const tier     = useAppStore((s) => s.zoomTier);
+  const opacity  = useAppStore((s) => s.radarOpacity);
+  const lightning = useAppStore((s) => s.showLightning);
   const setLayer = useAppStore((s) => s.setActiveLayer);
-  const setTier = useAppStore((s) => s.setZoomTier);
+  const setTier  = useAppStore((s) => s.setZoomTier);
   const setOpacity = useAppStore((s) => s.setRadarOpacity);
+  const toggleLightning = useAppStore((s) => s.toggleLightning);
 
   return (
     <div className="flex flex-col gap-3 glass-strong rounded-2xl p-3">
@@ -61,6 +63,25 @@ export function LayerControl() {
           </button>
         ))}
       </div>
+
+      {/* Lightning overlay toggle — works on any base layer */}
+      <button
+        onClick={toggleLightning}
+        className={cn(
+          'flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-[11px] uppercase tracking-wider transition',
+          lightning
+            ? 'bg-yellow-400/15 text-yellow-200'
+            : 'text-white/50 hover:text-white/80',
+        )}
+      >
+        <span className="flex items-center gap-1.5">
+          <Zap className="h-3.5 w-3.5" /> Lightning
+        </span>
+        <span className={cn(
+          'h-1.5 w-1.5 rounded-full transition',
+          lightning ? 'bg-yellow-300 shadow-[0_0_6px_#fde68a]' : 'bg-white/20',
+        )} />
+      </button>
 
       <div className="px-1">
         <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-widest text-white/50">

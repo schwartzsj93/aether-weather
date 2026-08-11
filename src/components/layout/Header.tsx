@@ -1,6 +1,7 @@
 import { Search, Sun, Moon } from 'lucide-react';
 import * as Switch from '@radix-ui/react-switch';
 import { useAppStore } from '@/store/appStore';
+import { NotificationBell } from '@/components/ui/NotificationBell';
 import { cn } from '@/lib/utils/cn';
 
 interface Props {
@@ -22,6 +23,7 @@ export function Header({ onSearch }: Props) {
       </div>
 
       <div className="flex items-center gap-2">
+        <NotificationBell />
         <button
           onClick={onSearch}
           className={cn(

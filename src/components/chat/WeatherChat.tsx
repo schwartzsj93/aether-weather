@@ -121,15 +121,19 @@ export function WeatherChat({ bundle, onClose }: Props) {
   const [streaming, setStreaming] = useState('');
   const [pending,   setPending]   = useState<PendingAttachment[]>([]);
 
-  const listRef    = useRef<HTMLDivElement>(null);
-  const textaRef   = useRef<HTMLTextAreaElement>(null);
-  const fileRef    = useRef<HTMLInputElement>(null);
-  const abortRef   = useRef<AbortController | null>(null);
+  const listRef       = useRef<HTMLDivElement>(null);
+  const textaRef      = useRef<HTMLTextAreaElement>(null);
+  const fileRef       = useRef<HTMLInputElement>(null);
+  const abortRef      = useRef<AbortController | null>(null);
+  const autoSentRef   = useRef(false);
+  const [marketsReady, setMarketsReady] = useState(false);
 
   // ── Fetch markets on mount ─────────────────────────────────────────────────
   useEffect(() => {
     const ctrl = new AbortController();
-    fetchWeatherMarkets(ctrl.signal).then(setMarkets).catch(() => {});
+    fetchWeatherMarkets(ctrl.signal)
+      .then((m) => { setMarkets(m); setMarketsReady(true); })
+      .catch(() => { setMarketsReady(true); });
     return () => ctrl.abort();
   }, []);
 
@@ -137,6 +141,19 @@ export function WeatherChat({ bundle, onClose }: Props) {
   useEffect(() => {
     return () => { abortRef.current?.abort(); };
   }, []);
+
+  // ── Auto Kalshi analysis on open ───────────────────────────────────────────
+  // Fires once per panel open when weather data + market fetch are both ready.
+  useEffect(() => {
+    if (autoSentRef.current || !bundle || !marketsReady) return;
+    autoSentRef.current = true;
+    send(
+      'Summarize the Kalshi weather prediction markets for my location: for each market state the prediction, ' +
+      'the market-implied probability, the volume (size), and a one-sentence interpretation of what it means ' +
+      'relative to the model forecast.',
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bundle, marketsReady]);
 
   // ── Auto-scroll to bottom ──────────────────────────────────────────────────
   useEffect(() => {

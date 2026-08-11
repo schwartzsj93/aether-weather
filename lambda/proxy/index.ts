@@ -22,6 +22,7 @@
 
 import crypto from 'node:crypto';
 import https from 'node:https';
+import { Readable } from 'node:stream';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 
 // ─── Secrets Manager ──────────────────────────────────────────────────────────
@@ -82,8 +83,12 @@ async function getKalshiCredentials(): Promise<KalshiCredentials | null> {
 // ─── Kalshi RSA-SHA256 request signing ────────────────────────────────────────
 
 function signKalshi(method: string, path: string, ts: string, privateKey: string): string {
-  const msg = ts + method.toUpperCase() + path;
-  return crypto.createSign('RSA-SHA256').update(msg).end().sign(privateKey, 'base64');
+  const msg = Buffer.from(ts + method.toUpperCase() + path);
+  return crypto.sign('SHA256', msg, {
+    key:        privateKey,
+    padding:    crypto.constants.RSA_PKCS1_PSS_PADDING,
+    saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
+  }).toString('base64');
 }
 
 // ─── Lambda streaming runtime types ───────────────────────────────────────────
@@ -123,29 +128,51 @@ declare const awslambda: AwsLambdaGlobal;
 // ─── Request validation ───────────────────────────────────────────────────────
 const ANTHROPIC_ALLOWED_METHODS = new Set(['POST', 'OPTIONS']);
 const ANTHROPIC_HOST             = 'api.anthropic.com';
-const KALSHI_HOST                = 'trading-api.kalshi.com';
+const KALSHI_HOST                = 'api.elections.kalshi.com';
 
-function rejectStream(responseStream: NodeJS.WritableStream, statusCode: number, message: string) {
-  const body = JSON.stringify({ error: message });
-  const stream = awslambda.HttpResponseStream.from(responseStream, {
-    statusCode,
-    headers: { 'content-type': 'application/json', 'content-length': String(Buffer.byteLength(body)) },
+// Helper: push a string body into an HttpResponseStream using the same
+// pipe-based pattern as the Anthropic handler.  Direct stream.end(body)
+// triggers 502 on Lambda Function URL because the write is async and the
+// 'finish' event fires before the underlying responseStream has actually
+// been written — piping a Readable resolves that race.
+function pipeBody(
+  responseStream: NodeJS.WritableStream,
+  statusCode:     number,
+  headers:        Record<string, string>,
+  body:           string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const outStream = awslambda.HttpResponseStream.from(responseStream, { statusCode, headers });
+    const src = new Readable({ read() {} });
+    src.pipe(outStream, { end: true });
+    outStream.on('finish', resolve);
+    outStream.on('error',  reject);
+    src.on('error',        reject);
+    src.push(body, 'utf8');
+    src.push(null);          // signal EOF → pipe calls outStream.end()
   });
-  stream.end(body);
 }
 
-function sendJson(responseStream: NodeJS.WritableStream, statusCode: number, payload: unknown, origin: string) {
-  const body = JSON.stringify(payload);
-  const stream = awslambda.HttpResponseStream.from(responseStream, {
+function rejectStream(responseStream: NodeJS.WritableStream, statusCode: number, message: string): Promise<void> {
+  return pipeBody(
+    responseStream,
     statusCode,
-    headers: {
+    { 'content-type': 'application/json' },
+    JSON.stringify({ error: message }),
+  );
+}
+
+function sendJson(responseStream: NodeJS.WritableStream, statusCode: number, payload: unknown, origin: string): Promise<void> {
+  return pipeBody(
+    responseStream,
+    statusCode,
+    {
       'content-type':                'application/json',
-      'content-length':              String(Buffer.byteLength(body)),
       'access-control-allow-origin': origin,
       'cache-control':               'no-cache',
     },
-  });
-  stream.end(body);
+    JSON.stringify(payload),
+  );
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -160,24 +187,18 @@ export const handler = awslambda.streamifyResponse(
 
     // ── CORS preflight ───────────────────────────────────────────────────────
     if (method === 'OPTIONS') {
-      const stream = awslambda.HttpResponseStream.from(responseStream, {
-        statusCode: 204,
-        headers: {
-          'access-control-allow-origin':  origin,
-          'access-control-allow-methods': 'GET, POST, OPTIONS',
-          'access-control-allow-headers': 'content-type, anthropic-version, anthropic-beta, x-request-id',
-          'access-control-max-age':       '86400',
-        },
-      });
-      stream.end();
-      return;
+      return pipeBody(responseStream, 204, {
+        'access-control-allow-origin':  origin,
+        'access-control-allow-methods': 'GET, POST, OPTIONS',
+        'access-control-allow-headers': 'content-type, anthropic-version, anthropic-beta, x-request-id',
+        'access-control-max-age':       '86400',
+      }, '');
     }
 
     // ── Kalshi market data (GET only, read-only) ──────────────────────────────
     if (isKalshi) {
       if (method !== 'GET') {
-        rejectStream(responseStream, 405, 'Only GET is supported for Kalshi market data.');
-        return;
+        return rejectStream(responseStream, 405, 'Only GET is supported for Kalshi market data.');
       }
 
       // Wrap the entire Kalshi flow so any signing / network error degrades
@@ -187,8 +208,7 @@ export const handler = awslambda.streamifyResponse(
 
         if (!creds) {
           // Graceful degradation — Kalshi not configured.
-          sendJson(responseStream, 200, { markets: [] }, origin);
-          return;
+          return sendJson(responseStream, 200, { markets: [] }, origin);
         }
 
         // Strip /api/kalshi prefix → forward to trading-api.kalshi.com
@@ -232,8 +252,7 @@ export const handler = awslambda.streamifyResponse(
               const raw = Buffer.concat(chunks).toString('utf8');
               let parsed: unknown;
               try { parsed = JSON.parse(raw); } catch { parsed = { markets: [] }; }
-              sendJson(responseStream, res.statusCode ?? 200, parsed, origin);
-              resolve();
+              sendJson(responseStream, res.statusCode ?? 200, parsed, origin).then(resolve, reject);
             });
             res.on('error', reject);
           });
@@ -242,20 +261,18 @@ export const handler = awslambda.streamifyResponse(
         });
       } catch (err) {
         console.error('[proxy] Kalshi handler error:', err);
-        sendJson(responseStream, 200, { markets: [] }, origin);
+        await sendJson(responseStream, 200, { markets: [] }, origin);
       }
       return;
     }
 
     // ── Anthropic streaming proxy ─────────────────────────────────────────────
     if (!isAnthropic) {
-      rejectStream(responseStream, 404, 'Unknown proxy path.');
-      return;
+      return rejectStream(responseStream, 404, 'Unknown proxy path.');
     }
 
     if (!ANTHROPIC_ALLOWED_METHODS.has(method)) {
-      rejectStream(responseStream, 405, `Method ${method} not allowed.`);
-      return;
+      return rejectStream(responseStream, 405, `Method ${method} not allowed.`);
     }
 
     // Strip our proxy prefix: /api/anthropic/v1/messages → /v1/messages
@@ -267,8 +284,7 @@ export const handler = awslambda.streamifyResponse(
       apiKey = await getApiKey();
     } catch (err) {
       console.error('[proxy] Failed to fetch API key:', err);
-      rejectStream(responseStream, 500, 'Failed to retrieve credentials.');
-      return;
+      return rejectStream(responseStream, 500, 'Failed to retrieve credentials.');
     }
 
     // Decode body.

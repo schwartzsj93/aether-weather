@@ -8,11 +8,26 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // selfDestroying unregisters any previously installed service worker and
-      // clears its caches — fixing stale-SW "offline" issues for existing users.
-      // The manifest is kept so the app remains installable, but no SW is
-      // registered going forward (live data apps don't benefit from SW caching).
-      selfDestroying: true,
+      registerType: 'autoUpdate',
+      // Cache the app shell so it loads instantly and works offline.
+      // API/weather calls are always network-first (live data).
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        runtimeCaching: [
+          {
+            // Weather, geocoding, and radar manifest — network first, fall back to cache
+            urlPattern: /^https:\/\/(api\.open-meteo\.com|geocoding-api\.open-meteo\.com|api\.rainviewer\.com)/,
+            handler: 'NetworkFirst',
+            options: { cacheName: 'weather-api', expiration: { maxAgeSeconds: 300 } },
+          },
+          {
+            // Map tiles — cache first (tiles rarely change)
+            urlPattern: /^https:\/\/.*\.(cartocdn\.com|basemaps\.cartocdn\.com|tilecache\.rainviewer\.com)/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'map-tiles', expiration: { maxEntries: 500, maxAgeSeconds: 3600 } },
+          },
+        ],
+      },
       manifest: {
         name: 'Aether Weather',
         short_name: 'Aether',
@@ -38,6 +53,15 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    proxy: {
+      // Forward /api/* to the deployed CloudFront → Lambda proxy so local dev
+      // gets live AI briefings and Kalshi markets without a local Lambda.
+      '/api': {
+        target: 'https://dllow6zve33wp.cloudfront.net',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   build: {
     target: 'es2022',

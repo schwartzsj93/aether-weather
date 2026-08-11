@@ -24,6 +24,8 @@ export interface AppState {
   radarOpacity: number;
   showLabels: boolean;
   voiceEnabled: boolean;
+  showLightning: boolean;
+  notifyHour: number | null;
 
   setUnits: (u: Units) => void;
   setTheme: (t: 'dark' | 'auto') => void;
@@ -35,12 +37,13 @@ export interface AppState {
   setRadarOpacity: (n: number) => void;
   toggleLabels: () => void;
   toggleVoice: () => void;
+  toggleLightning: () => void;
+  setNotifyHour: (h: number | null) => void;
 }
 
 const DEFAULT_LOCATIONS: Location[] = [
-  { id: '5128581', name: 'New York', latitude: 40.7128, longitude: -74.006, timezone: 'America/New_York', country: 'United States', countryCode: 'US', admin1: 'New York' },
-  { id: '2643743', name: 'London', latitude: 51.5074, longitude: -0.1278, timezone: 'Europe/London', country: 'United Kingdom', countryCode: 'GB', admin1: 'England' },
-  { id: '1850147', name: 'Tokyo', latitude: 35.6895, longitude: 139.6917, timezone: 'Asia/Tokyo', country: 'Japan', countryCode: 'JP' },
+  { id: '4888426', name: 'Highland Park', latitude: 42.1817, longitude: -87.8003, timezone: 'America/Chicago', country: 'United States', countryCode: 'US', admin1: 'Illinois' },
+  { id: '4887398', name: 'Chicago', latitude: 41.8781, longitude: -87.6298, timezone: 'America/Chicago', country: 'United States', countryCode: 'US', admin1: 'Illinois' },
 ];
 
 export const useAppStore = create<AppState>()(
@@ -55,6 +58,8 @@ export const useAppStore = create<AppState>()(
       radarOpacity: 0.75,
       showLabels: true,
       voiceEnabled: false,
+      showLightning: false,
+      notifyHour: null,
 
       setUnits: (u) => set({ units: u }),
       setTheme: (t) => set({ theme: t }),
@@ -78,18 +83,23 @@ export const useAppStore = create<AppState>()(
       setRadarOpacity: (n) => set({ radarOpacity: Math.min(1, Math.max(0, n)) }),
       toggleLabels: () => set((s) => ({ showLabels: !s.showLabels })),
       toggleVoice: () => set((s) => ({ voiceEnabled: !s.voiceEnabled })),
+      toggleLightning: () => set((s) => ({ showLightning: !s.showLightning })),
+      setNotifyHour: (h) => set({ notifyHour: h }),
     }),
     {
       name: 'aether-app',
-      version: 2,
-      // Migrate older persisted shapes (e.g. activeLayer = 'clouds' from v1)
-      // to the current narrower MapLayer union, so reloading after an upgrade
-      // doesn't strand the user on an unrenderable layer.
-      migrate: (persisted: unknown, _version: number) => {
+      version: 3,
+      migrate: (persisted: unknown, fromVersion: number) => {
         const s = (persisted ?? {}) as Partial<AppState>;
+        // v1→v2: fix unsupported activeLayer values
         const SUPPORTED: MapLayer[] = ['radar', 'satellite', 'wind'];
         if (s.activeLayer && !SUPPORTED.includes(s.activeLayer as MapLayer)) {
           s.activeLayer = 'radar';
+        }
+        // v2→v3: reset locations to Highland Park + Chicago defaults
+        if (fromVersion < 3) {
+          s.locations = DEFAULT_LOCATIONS;
+          s.activeLocationId = DEFAULT_LOCATIONS[0].id;
         }
         return s as AppState;
       },
@@ -103,6 +113,8 @@ export const useAppStore = create<AppState>()(
         radarOpacity: s.radarOpacity,
         showLabels: s.showLabels,
         voiceEnabled: s.voiceEnabled,
+        showLightning: s.showLightning,
+        notifyHour: s.notifyHour,
       }),
     }
   )

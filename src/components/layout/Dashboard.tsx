@@ -18,6 +18,7 @@ import { AirQualityCard } from '@/components/weather/AirQualityCard';
 import { SunMoonCard } from '@/components/weather/SunMoonCard';
 import { AlertsBanner } from '@/components/weather/AlertsBanner';
 import { EnsembleInsights } from '@/components/weather/EnsembleInsights';
+import { SevereWeatherSection } from '@/components/weather/SevereWeatherSection';
 import { WeatherMap } from '@/components/map/WeatherMap';
 import { VoiceAgent } from '@/components/voice/VoiceAgent';
 import { WeatherChat } from '@/components/chat/WeatherChat';
@@ -204,6 +205,14 @@ export function Dashboard() {
                   </CardReveal>
                 </div>
               </div>
+
+              {/* ── ROW 4 — severe weather detail (full-width) ────────────────── */}
+              <CardReveal delay={0.52}>
+                <SevereWeatherSection
+                  alerts={mergedAlerts}
+                  location={weather.data.location}
+                />
+              </CardReveal>
 
               <footer className="pb-6 pt-2 text-center text-[11px] text-white/40">
                 Data ·{' '}

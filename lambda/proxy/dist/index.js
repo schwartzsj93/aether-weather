@@ -25065,6 +25065,7 @@ __export(index_exports, {
 module.exports = __toCommonJS(index_exports);
 var import_node_crypto = __toESM(require("node:crypto"));
 var import_node_https = __toESM(require("node:https"));
+var import_node_stream = require("node:stream");
 var import_client_secrets_manager = __toESM(require_dist_cjs56());
 var sm = new import_client_secrets_manager.SecretsManagerClient({});
 var cachedApiKey = null;
@@ -25103,32 +25104,48 @@ async function getKalshiCredentials() {
   }
 }
 function signKalshi(method, path, ts, privateKey) {
-  const msg = ts + method.toUpperCase() + path;
-  return import_node_crypto.default.createSign("RSA-SHA256").update(msg).end().sign(privateKey, "base64");
+  const msg = Buffer.from(ts + method.toUpperCase() + path);
+  return import_node_crypto.default.sign("SHA256", msg, {
+    key: privateKey,
+    padding: import_node_crypto.default.constants.RSA_PKCS1_PSS_PADDING,
+    saltLength: import_node_crypto.default.constants.RSA_PSS_SALTLEN_DIGEST
+  }).toString("base64");
 }
 var ANTHROPIC_ALLOWED_METHODS = /* @__PURE__ */ new Set(["POST", "OPTIONS"]);
 var ANTHROPIC_HOST = "api.anthropic.com";
-var KALSHI_HOST = "trading-api.kalshi.com";
-function rejectStream(responseStream, statusCode, message) {
-  const body = JSON.stringify({ error: message });
-  const stream = awslambda.HttpResponseStream.from(responseStream, {
-    statusCode,
-    headers: { "content-type": "application/json", "content-length": String(Buffer.byteLength(body)) }
+var KALSHI_HOST = "api.elections.kalshi.com";
+function pipeBody(responseStream, statusCode, headers, body) {
+  return new Promise((resolve, reject) => {
+    const outStream = awslambda.HttpResponseStream.from(responseStream, { statusCode, headers });
+    const src = new import_node_stream.Readable({ read() {
+    } });
+    src.pipe(outStream, { end: true });
+    outStream.on("finish", resolve);
+    outStream.on("error", reject);
+    src.on("error", reject);
+    src.push(body, "utf8");
+    src.push(null);
   });
-  stream.end(body);
+}
+function rejectStream(responseStream, statusCode, message) {
+  return pipeBody(
+    responseStream,
+    statusCode,
+    { "content-type": "application/json" },
+    JSON.stringify({ error: message })
+  );
 }
 function sendJson(responseStream, statusCode, payload2, origin) {
-  const body = JSON.stringify(payload2);
-  const stream = awslambda.HttpResponseStream.from(responseStream, {
+  return pipeBody(
+    responseStream,
     statusCode,
-    headers: {
+    {
       "content-type": "application/json",
-      "content-length": String(Buffer.byteLength(body)),
       "access-control-allow-origin": origin,
       "cache-control": "no-cache"
-    }
-  });
-  stream.end(body);
+    },
+    JSON.stringify(payload2)
+  );
 }
 var handler = awslambda.streamifyResponse(
   async (event, responseStream) => {
@@ -25137,28 +25154,21 @@ var handler = awslambda.streamifyResponse(
     const isKalshi = event.rawPath.startsWith("/api/kalshi");
     const isAnthropic = event.rawPath.startsWith("/api/anthropic");
     if (method === "OPTIONS") {
-      const stream = awslambda.HttpResponseStream.from(responseStream, {
-        statusCode: 204,
-        headers: {
-          "access-control-allow-origin": origin,
-          "access-control-allow-methods": "GET, POST, OPTIONS",
-          "access-control-allow-headers": "content-type, anthropic-version, anthropic-beta, x-request-id",
-          "access-control-max-age": "86400"
-        }
-      });
-      stream.end();
-      return;
+      return pipeBody(responseStream, 204, {
+        "access-control-allow-origin": origin,
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "content-type, anthropic-version, anthropic-beta, x-request-id",
+        "access-control-max-age": "86400"
+      }, "");
     }
     if (isKalshi) {
       if (method !== "GET") {
-        rejectStream(responseStream, 405, "Only GET is supported for Kalshi market data.");
-        return;
+        return rejectStream(responseStream, 405, "Only GET is supported for Kalshi market data.");
       }
       try {
         const creds = await getKalshiCredentials();
         if (!creds) {
-          sendJson(responseStream, 200, { markets: [] }, origin);
-          return;
+          return sendJson(responseStream, 200, { markets: [] }, origin);
         }
         const kalshiPath = event.rawPath.replace(/^\/api\/kalshi/, "") || "/trade-api/v2/markets";
         const query2 = event.rawQueryString ? `?${event.rawQueryString}` : "";
@@ -25196,8 +25206,7 @@ ${b64}
               } catch {
                 parsed = { markets: [] };
               }
-              sendJson(responseStream, res.statusCode ?? 200, parsed, origin);
-              resolve();
+              sendJson(responseStream, res.statusCode ?? 200, parsed, origin).then(resolve, reject);
             });
             res.on("error", reject);
           });
@@ -25206,17 +25215,15 @@ ${b64}
         });
       } catch (err) {
         console.error("[proxy] Kalshi handler error:", err);
-        sendJson(responseStream, 200, { markets: [] }, origin);
+        await sendJson(responseStream, 200, { markets: [] }, origin);
       }
       return;
     }
     if (!isAnthropic) {
-      rejectStream(responseStream, 404, "Unknown proxy path.");
-      return;
+      return rejectStream(responseStream, 404, "Unknown proxy path.");
     }
     if (!ANTHROPIC_ALLOWED_METHODS.has(method)) {
-      rejectStream(responseStream, 405, `Method ${method} not allowed.`);
-      return;
+      return rejectStream(responseStream, 405, `Method ${method} not allowed.`);
     }
     const anthropicPath = event.rawPath.replace(/^\/api\/anthropic/, "") || "/v1/messages";
     const query = event.rawQueryString ? `?${event.rawQueryString}` : "";
@@ -25225,8 +25232,7 @@ ${b64}
       apiKey = await getApiKey();
     } catch (err) {
       console.error("[proxy] Failed to fetch API key:", err);
-      rejectStream(responseStream, 500, "Failed to retrieve credentials.");
-      return;
+      return rejectStream(responseStream, 500, "Failed to retrieve credentials.");
     }
     const bodyBuffer = event.body ? event.isBase64Encoded ? Buffer.from(event.body, "base64") : Buffer.from(event.body, "utf8") : null;
     const requestOptions = {

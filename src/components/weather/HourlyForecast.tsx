@@ -8,7 +8,7 @@
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import { WeatherIcon } from '@/components/ui/WeatherIcon';
-import { formatHour, formatTemperature } from '@/lib/utils/format';
+import { formatHour, formatTemperature, localNowISO } from '@/lib/utils/format';
 import { getCondition, nightVariant } from '@/lib/utils/weatherCodes';
 import type { WeatherBundle } from '@/types/weather';
 import { useMemo } from 'react';
@@ -32,15 +32,26 @@ export function HourlyForecast({ bundle }: Props) {
   const { hourly, location, units } = bundle;
   const ensemble = useEnsemble(location, units);
 
-  // Next 24 hours starting from the closest past hour
+  // Next 24 hours starting from the current local hour.
+  // Open-Meteo timestamps are bare local ISO ("2026-07-15T04:00") in the
+  // location's timezone — we compare them as strings against the local "now"
+  // so the display is correct regardless of the browser's own timezone.
   const slice = useMemo(() => {
-    const now = Date.now();
-    const startIdx = Math.max(
-      0,
-      hourly.findIndex((h) => new Date(h.time).getTime() >= now - 30 * 60_000),
-    );
-    return hourly.slice(startIdx, startIdx + 24);
-  }, [hourly]);
+    const nowStr = localNowISO(location.timezone); // e.g. "2026-07-15T04:30"
+    // Snap to the current whole hour (strip minutes)
+    const currentHourStr = nowStr.slice(0, 14) + '00'; // "2026-07-15T04:00"
+    const minute = parseInt(nowStr.slice(14, 16), 10);
+
+    // Find the index of the current-hour entry via string comparison
+    // (ISO strings sort lexicographically = chronologically).
+    const base = hourly.findIndex((h) => h.time >= currentHourStr);
+    const startIdx = Math.max(0, base < 0 ? 0 : base);
+
+    // If we're >30 min into the hour, skip to the next one so the displayed
+    // entry doesn't look almost entirely in the past.
+    const offset = minute >= 30 ? 1 : 0;
+    return hourly.slice(startIdx + offset, startIdx + offset + 24);
+  }, [hourly, location.timezone]);
 
   // Ensemble min/max band aligned to the same 24-hour window
   const band = useMemo(() => {

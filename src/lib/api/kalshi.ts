@@ -39,6 +39,18 @@ interface KalshiMarketsResponse {
 /** Markets closing more than 14 days from now are excluded. */
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
+/**
+ * Weather-related keywords used to filter markets from the broad Kalshi feed.
+ * The new api.elections.kalshi.com endpoint doesn't honour `category=weather`,
+ * so we filter client-side instead.
+ */
+const WEATHER_RE =
+  /\b(rain|snow|temp(?:erature)?|high|low|cold|hot|storm|wind|weather|flood|frost|ice|thunder|precip|hurricane|tornado|drought|heat|freeze|blizzard|sunny|cloud|fog|hail|sleet|dew)\b/i;
+
+function isWeatherMarket(raw: KalshiRawMarket): boolean {
+  return WEATHER_RE.test(raw.title ?? '') || WEATHER_RE.test(raw.ticker ?? '');
+}
+
 function mapMarket(raw: KalshiRawMarket): KalshiMarket {
   // Kalshi returns prices in cents (0–100); normalise to 0–1.
   const normalise = (v: number | undefined): number => {
@@ -63,13 +75,12 @@ function mapMarket(raw: KalshiRawMarket): KalshiMarket {
 
 export async function fetchWeatherMarkets(signal?: AbortSignal): Promise<KalshiMarket[]> {
   try {
-    const url = '/api/kalshi/trade-api/v2/markets?limit=50&status=open&category=weather';
+    // Fetch a broad slice of open markets — the new Kalshi Elections API ignores
+    // the `category=weather` param, so we filter by keyword on the client instead.
+    const url = '/api/kalshi/trade-api/v2/markets?limit=200&status=open';
     const res = await fetch(url, { signal });
 
-    if (!res.ok) {
-      // Graceful degradation — Kalshi key may not be configured.
-      return [];
-    }
+    if (!res.ok) return [];
 
     const data = (await res.json()) as KalshiMarketsResponse;
     const raw  = data.markets ?? [];
@@ -77,6 +88,7 @@ export async function fetchWeatherMarkets(signal?: AbortSignal): Promise<KalshiM
     const cutoff = Date.now() + FOURTEEN_DAYS_MS;
 
     return raw
+      .filter(isWeatherMarket)
       .map(mapMarket)
       .filter((m) => {
         if (!m.close_time) return false;
@@ -84,7 +96,6 @@ export async function fetchWeatherMarkets(signal?: AbortSignal): Promise<KalshiM
         return !isNaN(closeMs) && closeMs <= cutoff;
       });
   } catch {
-    // Network error, AbortError, JSON parse failure — all silent.
     return [];
   }
 }

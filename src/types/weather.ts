@@ -87,8 +87,18 @@ export interface SevereAlert {
   severity: 'minor' | 'moderate' | 'severe' | 'extreme';
   headline: string;
   description: string;
+  /** Plain-English instructions from NWS (e.g. "Turn around, don't drown"). */
+  instruction?: string;
+  /** Geographic area description (e.g. "Cook, Lake counties in Illinois"). */
+  areaDesc?: string;
+  /** How quickly action is needed. */
+  urgency?: 'Immediate' | 'Expected' | 'Future' | 'Past' | 'Unknown';
+  /** How certain the hazard is. */
+  certainty?: 'Observed' | 'Likely' | 'Possible' | 'Unlikely' | 'Unknown';
   start: string;
   end: string;
+  /** ISO string when the alert expires (may differ from `end`). */
+  expires?: string;
   source: string;
 }
 

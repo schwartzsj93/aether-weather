@@ -1,7 +1,7 @@
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Moon, Sunrise, Sunset } from 'lucide-react';
 import type { WeatherBundle } from '@/types/weather';
-import { formatTime } from '@/lib/utils/format';
+import { formatTime, parseLocalISO } from '@/lib/utils/format';
 
 interface Props { bundle: WeatherBundle; }
 
@@ -26,9 +26,9 @@ export function SunMoonCard({ bundle }: Props) {
   if (!today) return null;
   const tz = bundle.location.timezone;
 
-  // Sun arc progress 0..1
-  const sunrise = new Date(today.sunrise).getTime();
-  const sunset  = new Date(today.sunset).getTime();
+  // Sun arc progress 0..1 — parse bare local ISO correctly for this timezone
+  const sunrise = parseLocalISO(today.sunrise, tz);
+  const sunset  = parseLocalISO(today.sunset, tz);
   const now     = Date.now();
   const t = Math.max(0, Math.min(1, (now - sunrise) / (sunset - sunrise || 1)));
   const angle = Math.PI * t;

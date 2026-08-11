@@ -24,9 +24,14 @@ interface NWSResponse {
       event: string;
       headline: string;
       description: string;
+      instruction?: string;
+      areaDesc?: string;
       severity: 'Minor' | 'Moderate' | 'Severe' | 'Extreme' | 'Unknown';
+      urgency?: string;
+      certainty?: string;
       onset?: string;
       ends?: string;
+      expires?: string;
       sent: string;
       senderName?: string;
     };
@@ -58,8 +63,13 @@ export async function fetchAlerts({ latitude, longitude }: Coordinates): Promise
       severity: SEVERITY_MAP[f.properties.severity] ?? 'minor',
       headline: f.properties.headline,
       description: f.properties.description,
+      instruction: f.properties.instruction,
+      areaDesc: f.properties.areaDesc,
+      urgency: f.properties.urgency as SevereAlert['urgency'],
+      certainty: f.properties.certainty as SevereAlert['certainty'],
       start: f.properties.onset ?? f.properties.sent,
       end: f.properties.ends ?? f.properties.onset ?? f.properties.sent,
+      expires: f.properties.expires,
       source: f.properties.senderName ?? 'NWS',
     }));
   } catch {
@@ -73,7 +83,7 @@ export async function fetchAlerts({ latitude, longitude }: Coordinates): Promise
  * locations the NWS clearly doesn't cover. Includes CONUS + Alaska + Hawaii
  * + Puerto Rico/USVI + Guam/CNMI + American Samoa.
  */
-function isLikelyUSTerritory(lat: number, lon: number): boolean {
+export function isLikelyUSTerritory(lat: number, lon: number): boolean {
   // CONUS
   if (lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66) return true;
   // Alaska

@@ -29,6 +29,7 @@ import { getBasemapStyle } from './basemap';
 import { LayerControl } from './LayerControl';
 import { RadarTimeline } from './RadarTimeline';
 import { WindOverlay } from './WindOverlay';
+import { LightningOverlay } from './LightningOverlay';
 import { MapClickPopup, type PopupState } from './MapClickPopup';
 import { reverseGeocode } from '@/lib/api/reverseGeocode';
 import { fetchQuickForecast } from '@/lib/api/quickForecast';
@@ -58,10 +59,11 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
   const unitsRef = useRef<Units>(units);
   useEffect(() => { unitsRef.current = units; }, [units]);
 
-  const layer     = useAppStore((s) => s.activeLayer);
-  const tier      = useAppStore((s) => s.zoomTier);
-  const opacity   = useAppStore((s) => s.radarOpacity);
-  const showLabels = useAppStore((s) => s.showLabels);
+  const layer        = useAppStore((s) => s.activeLayer);
+  const tier         = useAppStore((s) => s.zoomTier);
+  const opacity      = useAppStore((s) => s.radarOpacity);
+  const showLabels   = useAppStore((s) => s.showLabels);
+  const showLightning = useAppStore((s) => s.showLightning);
 
   const manifest = useRadarManifest();
   const frames: RadarFrame[] = useMemo(() => {
@@ -70,6 +72,10 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
     if (layer === 'radar')    return [...manifest.data.radar.past, ...manifest.data.radar.nowcast];
     return [];
   }, [manifest.data, layer]);
+  const pastCount = useMemo(() => {
+    if (!manifest.data || layer !== 'radar') return frames.length;
+    return manifest.data.radar.past.length;
+  }, [manifest.data, layer, frames.length]);
   const [frameIndex, setFrameIndex] = useState(0);
   useEffect(() => { setFrameIndex(Math.max(0, frames.length - 4)); }, [frames.length]);
 
@@ -137,12 +143,14 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
     if (markerRef.current) markerRef.current.remove();
 
     const el = document.createElement('div');
-    el.className = 'aether-marker';
+    // Explicit 12×12 so MapLibre's anchor:'center' offset is correct.
+    // Without explicit dimensions the div expands to viewport width,
+    // causing the marker to render ~600px left of the actual coordinate.
+    el.style.cssText = 'position: relative; width: 12px; height: 12px; overflow: visible;';
     el.innerHTML = `
       <div class="absolute -inset-3 rounded-full bg-sky-400/30 animate-ping"></div>
-      <div class="relative h-3 w-3 rounded-full bg-sky-300 shadow-[0_0_18px_rgba(125,211,252,0.9)]"></div>
+      <div class="absolute inset-0 rounded-full bg-sky-300 shadow-[0_0_18px_rgba(125,211,252,0.9)]"></div>
     `;
-    el.style.position = 'relative';
     markerRef.current = new maplibregl.Marker({ element: el, anchor: 'center' })
       .setLngLat([location.longitude, location.latitude])
       .addTo(m);
@@ -332,12 +340,15 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
       {/* Radar / satellite timeline */}
       {(layer === 'radar' || layer === 'satellite') && frames.length > 0 && (
         <div className="pointer-events-auto absolute bottom-3 left-3 right-3 z-10">
-          <RadarTimeline frames={frames} index={frameIndex} onChange={setFrameIndex} />
+          <RadarTimeline frames={frames} index={frameIndex} onChange={setFrameIndex} pastCount={pastCount} />
         </div>
       )}
 
       {/* Wind particle overlay */}
       <WindOverlay map={mapInstance} active={layer === 'wind'} opacity={opacity} />
+
+      {/* Real-time lightning strikes */}
+      <LightningOverlay map={mapInstance} active={showLightning} />
 
       {layer === 'wind' && (
         <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full glass-strong px-3 py-1.5 text-[11px] uppercase tracking-widest text-white/70">

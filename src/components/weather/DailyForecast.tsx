@@ -72,7 +72,7 @@ export function DailyForecast({ bundle }: Props) {
           const hi   = ((d.temperatureMax - span.allMin) / span.range) * 100;
           const isExpanded  = expandedDate === d.date;
           const dayHourly   = hourlyByDate.get(d.date) ?? [];
-          const label       = i === 0 ? 'Today' : formatDayShort(d.date, location.timezone);
+          const label       = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : formatDayShort(d.date, location.timezone);
 
           return (
             <div key={d.date}>
