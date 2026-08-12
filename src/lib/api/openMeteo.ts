@@ -13,6 +13,7 @@ import type {
   DailyPoint,
   HourlyPoint,
   Location,
+  MinutelyPoint,
   Units,
   WeatherBundle,
 } from '@/types/weather';
@@ -49,6 +50,11 @@ interface OMForecastResponse {
     is_day: number[];
     uv_index: number[];
     visibility?: number[];
+  };
+  minutely_15?: {
+    time: string[];
+    precipitation: number[];
+    weather_code: number[];
   };
   daily: {
     time: string[];
@@ -127,6 +133,10 @@ export async function fetchWeather(location: Location, units: Units): Promise<We
       'uv_index',
       'visibility',
     ].join(','),
+    // 15-min precipitation timing — powers the "MinuteCast" style card.
+    // Global model data (not radar extrapolation), so it works everywhere
+    // RainViewer's flaky nowcast radar doesn't.
+    minutely_15: ['precipitation', 'weather_code'].join(','),
     daily: [
       'temperature_2m_max',
       'temperature_2m_min',
@@ -174,6 +184,12 @@ export async function fetchWeather(location: Location, units: Units): Promise<We
     uvIndex: res.hourly.uv_index[i] ?? 0,
   }));
 
+  const minutely: MinutelyPoint[] = (res.minutely_15?.time ?? []).map((t, i) => ({
+    time: t,
+    precipitation: res.minutely_15!.precipitation[i] ?? 0,
+    weatherCode: res.minutely_15!.weather_code[i] ?? 0,
+  }));
+
   const daily: DailyPoint[] = res.daily.time.map((d, i) => ({
     date: d,
     temperatureMax: res.daily.temperature_2m_max[i],
@@ -194,6 +210,7 @@ export async function fetchWeather(location: Location, units: Units): Promise<We
     units,
     current,
     hourly,
+    minutely,
     daily,
     alerts: [],            // populated by warnings provider (future)
     fetchedAt: Date.now(),

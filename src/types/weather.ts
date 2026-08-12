@@ -51,6 +51,12 @@ export interface HourlyPoint {
   uvIndex: number;
 }
 
+export interface MinutelyPoint {
+  time: string;             // bare local ISO, 15-min step
+  precipitation: number;    // mm or inch depending on units
+  weatherCode: number;      // WMO code
+}
+
 export interface DailyPoint {
   date: string;
   temperatureMax: number;
@@ -107,6 +113,7 @@ export interface WeatherBundle {
   units: Units;
   current: CurrentConditions;
   hourly: HourlyPoint[];
+  minutely: MinutelyPoint[];
   daily: DailyPoint[];
   alerts: SevereAlert[];
   airQuality?: AirQuality;

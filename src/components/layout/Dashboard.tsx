@@ -13,6 +13,7 @@ import { ParticleLayer } from '@/components/effects/ParticleLayer';
 import { CurrentConditions } from '@/components/weather/CurrentConditions';
 import { WeatherSummary } from '@/components/weather/WeatherSummary';
 import { HourlyForecast } from '@/components/weather/HourlyForecast';
+import { MinuteCast } from '@/components/weather/MinuteCast';
 import { DailyForecast } from '@/components/weather/DailyForecast';
 import { AirQualityCard } from '@/components/weather/AirQualityCard';
 import { SunMoonCard } from '@/components/weather/SunMoonCard';
@@ -166,6 +167,17 @@ export function Dashboard() {
                   </CardReveal>
                 </div>
               </div>
+
+              {/* ── MINUTECAST — short-term precip timing, next 2 hours ────────── */}
+              {weather.data.minutely.length > 0 && (
+                <CardReveal delay={0.2}>
+                  <MinuteCast
+                    minutely={weather.data.minutely}
+                    timezone={weather.data.location.timezone}
+                    units={weather.data.units}
+                  />
+                </CardReveal>
+              )}
 
               {/* ── ROW 2 — hourly sparkline + 10-day outlook ─────────────────── */}
               <div className="grid grid-cols-12 gap-4 md:gap-5 lg:gap-6">
