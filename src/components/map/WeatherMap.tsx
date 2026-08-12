@@ -33,6 +33,7 @@ import { LightningOverlay } from './LightningOverlay';
 import { MapClickPopup, type PopupState } from './MapClickPopup';
 import { reverseGeocode } from '@/lib/api/reverseGeocode';
 import { fetchQuickForecast } from '@/lib/api/quickForecast';
+import { cn } from '@/lib/utils/cn';
 import type { Location, Units } from '@/types/weather';
 
 interface Props {
@@ -296,13 +297,13 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
       {/* Vignette gradient */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/55" />
 
-      {/* Layer control — top-left; narrower on mobile so more map shows through */}
-      <div className="pointer-events-auto absolute left-3 top-3 z-10 w-[min(88%,240px)] sm:w-[min(92%,360px)]">
+      {/* Layer control — top-left; compact on mobile so more map shows through */}
+      <div className="pointer-events-auto absolute left-2 top-2 z-10 w-[min(70%,200px)] sm:left-3 sm:top-3 sm:w-[min(92%,360px)]">
         <LayerControl />
       </div>
 
-      {/* Recenter + Fullscreen buttons — top-right */}
-      <div className="pointer-events-auto absolute right-3 top-3 z-10 flex items-center gap-2">
+      {/* Recenter + Fullscreen buttons — top-right; icon-only on mobile */}
+      <div className="pointer-events-auto absolute right-2 top-2 z-10 flex items-center gap-1.5 sm:right-3 sm:top-3 sm:gap-2">
         <button
           onClick={() =>
             mapRef.current?.flyTo({
@@ -310,18 +311,18 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
               zoom:   ZOOM_TIER_LEVELS.local,
             })
           }
-          className="flex items-center gap-1.5 rounded-full glass-strong px-3 py-1.5 text-xs text-white/85 hover:text-white"
+          className="flex h-7 w-7 items-center justify-center rounded-full glass-strong text-white/85 hover:text-white sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs"
           aria-label="Recenter map"
         >
           <MapPin className="h-3.5 w-3.5 text-sky-300" />
-          Recenter
+          <span className="hidden sm:inline">Recenter</span>
         </button>
 
         {/* Fullscreen only makes sense on the dashboard — hidden on /map */}
         {!fullPage && (
           <button
             onClick={isFullscreen ? exitFullscreen : enterFullscreen}
-            className="flex h-8 w-8 items-center justify-center rounded-full glass-strong text-white/80 hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-full glass-strong text-white/80 hover:text-white sm:h-8 sm:w-8"
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen map'}
           >
             {isFullscreen
@@ -337,9 +338,17 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
         <MapClickPopup popup={popup} onClose={closePopup} />
       </div>
 
-      {/* Radar / satellite timeline */}
+      {/* Radar / satellite timeline. On the full-page /map route the map
+          fills the whole viewport at every screen size, so the fixed
+          voice-orb button (56px, pinned to the real bottom-right corner)
+          always sits in the exact same spot — extra right clearance keeps
+          the timestamp from being covered. The embedded dashboard map
+          doesn't need it: it's a mid-page card, not viewport-edge-aligned. */}
       {(layer === 'radar' || layer === 'satellite') && frames.length > 0 && (
-        <div className="pointer-events-auto absolute bottom-3 left-3 right-3 z-10">
+        <div className={cn(
+          'pointer-events-auto absolute bottom-3 left-3 z-10',
+          fullPage ? 'right-[4.75rem]' : 'right-3',
+        )}>
           <RadarTimeline frames={frames} index={frameIndex} onChange={setFrameIndex} pastCount={pastCount} />
         </div>
       )}
@@ -357,9 +366,14 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
         </div>
       )}
 
-      {/* Click-to-forecast hint (fades away after first popup appears) */}
-      {!popup && (
-        <div className="pointer-events-none absolute bottom-3 right-3 z-10 rounded-full glass px-2.5 py-1 text-[11px] text-white/45">
+      {/* Click-to-forecast hint (fades away after first popup appears).
+          Only shown when the RadarTimeline isn't occupying the same
+          bottom-right corner — otherwise it paints over the timestamp. */}
+      {!popup && !((layer === 'radar' || layer === 'satellite') && frames.length > 0) && (
+        <div className={cn(
+          'pointer-events-none absolute bottom-3 z-10 rounded-full glass px-2.5 py-1 text-[11px] text-white/45',
+          fullPage ? 'right-[4.75rem]' : 'right-3',
+        )}>
           Click map for local forecast
         </div>
       )}

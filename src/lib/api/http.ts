@@ -1,7 +1,13 @@
 /** Tiny fetch wrapper with timeout + JSON parsing + typed errors. */
 
 export class ApiError extends Error {
-  constructor(public readonly status: number, message: string, public readonly body?: unknown) {
+  constructor(
+    public readonly status: number,
+    message: string,
+    public readonly body?: unknown,
+    /** Full request URL — kept off `message` so it never leaks into user-facing UI. */
+    public readonly url?: string,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -16,7 +22,11 @@ export async function getJson<T>(url: string, init: RequestInit & { timeoutMs?: 
     if (!res.ok) {
       let body: unknown;
       try { body = await res.json(); } catch { /* ignore */ }
-      throw new ApiError(res.status, `Request failed (${res.status}) ${url}`, body);
+      // Message stays generic and user-safe; the full URL (which can contain
+      // exact coordinates) is logged for debugging but never rendered.
+      const err = new ApiError(res.status, `Request failed (${res.status})`, body, url);
+      console.error('[getJson]', err.message, url, body);
+      throw err;
     }
     return (await res.json()) as T;
   } finally {

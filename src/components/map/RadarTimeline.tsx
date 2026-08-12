@@ -49,11 +49,11 @@ export function RadarTimeline({ frames, index, onChange, pastCount }: Props) {
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-2xl glass-strong px-3 py-2">
+    <div className="flex items-center gap-2 sm:gap-3 rounded-2xl glass-strong px-2 py-1.5 sm:px-3 sm:py-2">
       {/* Play / Pause */}
       <button
         onClick={() => setPlaying((p) => !p)}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-400/20 text-sky-100 hover:bg-sky-400/30"
+        className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full bg-sky-400/20 text-sky-100 hover:bg-sky-400/30"
         aria-label={playing ? 'Pause radar loop' : 'Play radar loop'}
       >
         {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
@@ -122,8 +122,8 @@ export function RadarTimeline({ frames, index, onChange, pastCount }: Props) {
       </div>
 
       {/* Timestamp */}
-      <div className={cn('w-24 shrink-0 text-right text-xs tabular-nums', isFuture ? 'text-amber-200' : 'text-white/85')}>
-        {isFuture ? 'NOW + ' : ''}
+      <div className={cn('w-16 sm:w-24 shrink-0 text-right text-[11px] sm:text-xs tabular-nums', isFuture ? 'text-amber-200' : 'text-white/85')}>
+        {isFuture ? <span className="hidden sm:inline">NOW + </span> : null}
         {date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
       </div>
     </div>

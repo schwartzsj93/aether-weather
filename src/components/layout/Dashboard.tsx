@@ -103,7 +103,11 @@ export function Dashboard() {
               className="grid flex-1 place-items-center text-center text-rose-200">
               <div>
                 <div className="text-lg font-semibold">Couldn't load the forecast.</div>
-                <div className="text-sm text-rose-200/70">{(weather.error as Error)?.message}</div>
+                {/* Never render the raw error/URL here — it can contain exact
+                    coordinates and internal API details. Log it instead. */}
+                <div className="text-sm text-rose-200/70">
+                  Check your connection and try again.
+                </div>
                 <button onClick={() => weather.refetch()}
                   className="mt-3 rounded-full bg-rose-400/20 px-4 py-1.5 text-sm hover:bg-rose-400/30">
                   Retry

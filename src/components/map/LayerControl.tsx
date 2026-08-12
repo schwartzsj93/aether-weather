@@ -7,9 +7,9 @@ import { cn } from '@/lib/utils/cn';
 // Only layers actually rendered by WeatherMap. Temp / Clouds are still pending
 // (deck.gl heatmap + raster shading from Open-Meteo's grid).
 const LAYERS: { key: MapLayer; label: string; icon: React.ReactNode }[] = [
-  { key: 'radar',     label: 'Radar',     icon: <Radar className="h-4 w-4" /> },
-  { key: 'satellite', label: 'Satellite', icon: <Satellite className="h-4 w-4" /> },
-  { key: 'wind',      label: 'Wind',      icon: <Wind className="h-4 w-4" /> },
+  { key: 'radar',     label: 'Radar',     icon: <Radar className="h-3.5 w-3.5" /> },
+  { key: 'satellite', label: 'Satellite', icon: <Satellite className="h-3.5 w-3.5" /> },
+  { key: 'wind',      label: 'Wind',      icon: <Wind className="h-3.5 w-3.5" /> },
 ];
 
 const TIERS: { key: MapZoomTier; label: string; icon: React.ReactNode }[] = [
@@ -30,8 +30,9 @@ export function LayerControl() {
   const toggleLightning = useAppStore((s) => s.toggleLightning);
 
   return (
-    <div className="flex flex-col gap-3 glass-strong rounded-2xl p-3">
-      {/* ── Layer tabs — visible on all screen sizes ─────────────────────── */}
+    <div className="flex flex-col gap-2 sm:gap-3 glass-strong rounded-2xl p-1.5 sm:p-3">
+      {/* ── Layer tabs — visible on all screen sizes; noticeably more compact
+             on mobile since it's the only control shown there ──────────── */}
       <Tabs.Root value={layer} onValueChange={(v) => setLayer(v as MapLayer)}>
         <Tabs.List className="flex items-center gap-1 rounded-xl bg-black/30 p-1">
           {LAYERS.map((l) => (
@@ -39,7 +40,7 @@ export function LayerControl() {
               key={l.key}
               value={l.key}
               className={cn(
-                'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white/65 transition',
+                'flex flex-1 items-center justify-center gap-1 sm:gap-1.5 rounded-lg px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-[11px] sm:text-xs font-medium text-white/65 transition',
                 'data-[state=active]:bg-sky-400/20 data-[state=active]:text-sky-100'
               )}
             >

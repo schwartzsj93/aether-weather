@@ -143,6 +143,16 @@ body::before {
 .maplibregl-ctrl-attrib a { color: rgba(255, 255, 255, 0.7) !important; }
 .maplibregl-canvas:focus { outline: none; }
 
+/* Shrink the built-in zoom/compass control on narrow screens — at default
+   size it competes hard with our own top-right Recenter button and eats a
+   disproportionate chunk of a short mobile map tile. */
+@media (max-width: 639px) {
+  .maplibregl-ctrl-top-right {
+    transform: scale(0.8);
+    transform-origin: top right;
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Animations                                                                  */
 /* -------------------------------------------------------------------------- */
