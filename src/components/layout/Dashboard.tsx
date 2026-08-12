@@ -80,7 +80,8 @@ export function Dashboard() {
       <DynamicBackground weatherCode={current?.weatherCode ?? 0} isDay={current?.isDay ?? true} />
       {current && <ParticleLayer weatherCode={current.weatherCode} />}
 
-      <div className="relative z-10 mx-auto flex min-h-dvh max-w-[1600px] flex-col px-4 py-4 md:px-6 lg:px-10">
+      {/* pt clears the iOS status bar (viewport-fit=cover draws under it) */}
+      <div className="relative z-10 mx-auto flex min-h-dvh max-w-[1600px] flex-col px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] md:px-6 lg:px-10">
         <Header onSearch={() => setSearchOpen(true)} />
         <LocationStrip onSearch={() => setSearchOpen(true)} />
 
@@ -260,7 +261,7 @@ export function Dashboard() {
       </AnimatePresence>
 
       {/* Chat open button — bottom-left floating pill */}
-      <div className="pointer-events-none fixed bottom-6 left-6 z-[200]">
+      <div className="pointer-events-none fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-6 z-[200]">
         <ChatButton onClick={() => setChatOpen(true)} />
       </div>
     </div>

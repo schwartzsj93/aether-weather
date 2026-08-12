@@ -346,10 +346,24 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
           doesn't need it: it's a mid-page card, not viewport-edge-aligned. */}
       {(layer === 'radar' || layer === 'satellite') && frames.length > 0 && (
         <div className={cn(
-          'pointer-events-auto absolute bottom-3 left-3 z-10',
-          fullPage ? 'right-[4.75rem]' : 'right-3',
+          'pointer-events-auto absolute left-3 z-10',
+          fullPage
+            ? 'right-24 bottom-[calc(0.75rem+env(safe-area-inset-bottom))]'
+            : 'right-3 bottom-3',
         )}>
           <RadarTimeline frames={frames} index={frameIndex} onChange={setFrameIndex} pastCount={pastCount} />
+        </div>
+      )}
+
+      {/* Empty state. RainViewer intermittently serves zero frames for a
+          layer — satellite.infrared in particular is often empty. Without
+          this the tab renders a bare basemap with no explanation, which
+          reads as the app being broken. */}
+      {(layer === 'radar' || layer === 'satellite') && manifest.data && frames.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
+          <div className="rounded-full glass-strong px-3.5 py-2 text-[11px] text-white/60">
+            {layer === 'satellite' ? 'Satellite imagery' : 'Radar'} unavailable right now
+          </div>
         </div>
       )}
 
@@ -371,8 +385,10 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
           bottom-right corner — otherwise it paints over the timestamp. */}
       {!popup && !((layer === 'radar' || layer === 'satellite') && frames.length > 0) && (
         <div className={cn(
-          'pointer-events-none absolute bottom-3 z-10 rounded-full glass px-2.5 py-1 text-[11px] text-white/45',
-          fullPage ? 'right-[4.75rem]' : 'right-3',
+          'pointer-events-none absolute z-10 rounded-full glass px-2.5 py-1 text-[11px] text-white/45',
+          fullPage
+            ? 'right-24 bottom-[calc(0.75rem+env(safe-area-inset-bottom))]'
+            : 'right-3 bottom-3',
         )}>
           Click map for local forecast
         </div>

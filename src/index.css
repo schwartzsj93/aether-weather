@@ -131,6 +131,15 @@ body::before {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Safe-area insets                                                            */
+/* -------------------------------------------------------------------------- */
+/* index.html sets viewport-fit=cover + black-translucent, so page content
+   renders *underneath* the iOS status bar and home indicator. Anything
+   anchored to a viewport edge must opt back out via these.                   */
+@utility pt-safe { padding-top: env(safe-area-inset-top); }
+@utility pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+
+/* -------------------------------------------------------------------------- */
 /* MapLibre overrides                                                          */
 /* -------------------------------------------------------------------------- */
 .maplibregl-ctrl-attrib,

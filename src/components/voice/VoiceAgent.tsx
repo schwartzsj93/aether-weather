@@ -249,7 +249,7 @@ export function VoiceAgent({ bundle }: Props) {
   );
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-[200] flex flex-col items-end gap-3">
+    <div className="pointer-events-none fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-6 z-[200] flex flex-col items-end gap-3">
 
       {/* ── Conversation panel ──────────────────────────────────────────────── */}
       <AnimatePresence>

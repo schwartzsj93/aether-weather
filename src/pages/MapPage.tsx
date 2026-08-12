@@ -41,15 +41,20 @@ export function MapPage() {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-20 flex h-12 shrink-0 items-center gap-3 border-b border-white/6 px-4"
+        className="relative z-20 flex shrink-0 items-center gap-3 border-b border-white/6 px-4 pt-safe"
         style={{
           background:     'linear-gradient(to bottom, rgba(5,7,15,0.92), rgba(5,7,15,0.75))',
           backdropFilter: 'blur(24px) saturate(160%)',
+          // 3rem of chrome *below* whatever the status bar occupies. Without
+          // the inset the iOS clock renders directly on top of the back button.
+          minHeight: 'calc(3rem + env(safe-area-inset-top))',
         }}
       >
-        {/* Back button */}
+        {/* Back button — navigate('/') rather than navigate(-1): a PWA
+            cold-launched at /map (or a refresh here) has no history entry,
+            and back(-1) would silently do nothing, trapping the user. */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/')}
           className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[12px] text-white/70 transition hover:bg-white/10 hover:text-white"
           aria-label="Back to dashboard"
         >
