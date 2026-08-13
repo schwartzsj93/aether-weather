@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import { Maximize2, Minimize2, MapPin } from 'lucide-react';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore, type MapZoomTier } from '@/store/appStore';
 import { useRadarManifest } from '@/hooks/useWeather';
 import { buildRadarTileUrl, buildSatelliteTileUrl, type RadarFrame } from '@/lib/api/rainviewer';
 import { getBasemapStyle } from './basemap';
@@ -61,7 +61,12 @@ export function WeatherMap({ location, units, fullPage = false }: Props) {
   useEffect(() => { unitsRef.current = units; }, [units]);
 
   const layer        = useAppStore((s) => s.activeLayer);
-  const tier         = useAppStore((s) => s.zoomTier);
+  const storedTier   = useAppStore((s) => s.zoomTier);
+  // zoomTier is persisted, but the tier buttons are hidden below the sm
+  // breakpoint — a phone that ever saved 'global'/'country' would be stuck
+  // zoomed out with no UI to escape. Mobile always gets 'local'.
+  const tier: MapZoomTier =
+    typeof window !== 'undefined' && window.innerWidth < 640 ? 'local' : storedTier;
   const opacity      = useAppStore((s) => s.radarOpacity);
   const showLabels   = useAppStore((s) => s.showLabels);
   const showLightning = useAppStore((s) => s.showLightning);
