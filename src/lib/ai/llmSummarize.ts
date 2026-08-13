@@ -25,6 +25,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { WeatherBundle } from '@/types/weather';
 import { getCondition } from '@/lib/utils/weatherCodes';
+import { localNowISO } from '@/lib/utils/format';
 
 export type BriefingTone = 'briefing' | 'quick' | 'deep' | 'outdoor' | 'commuter';
 
@@ -58,6 +59,8 @@ Style rules — non-negotiable:
 - One topic per sentence. No filler ("Looking ahead", "As we move into…").
 - Refer to the location by its short name once, then drop it.
 - If conditions are quiet, say so plainly. Don't manufacture drama.
+- The data block includes localTimeNow — everything before that moment is the past; never forecast it.
+- If activeAlerts is non-empty, open with the alert (what, how severe, until when) before anything else.
 
 Output: a single plain-prose paragraph, no preamble.`;
 
@@ -65,16 +68,42 @@ interface ForecastDigest {
   location: string;
   units: string;
   timezone: string;
+  localTimeNow: string;
   now: { time: string; temperature: number; feelsLike: number; condition: string; windKmh: number; gustKmh: number; humidity: number; uv: number; isDay: boolean };
+  activeAlerts: Array<{ event: string; severity: string; headline: string; until: string }>;
+  next2hPrecip?: string;
   next24h: Array<{ time: string; t: number; condition: string; windDir: number; windSpeed: number; precipMm: number; precipPct: number }>;
   next5d: Array<{ date: string; condition: string; tMin: number; tMax: number; precipMm: number; precipPct: number; gustMax: number; sunrise: string; sunset: string }>;
 }
 
 function digest(bundle: WeatherBundle): ForecastDigest {
+  const tz = bundle.location.timezone;
+
+  // Start the 24h window at the CURRENT local hour, not index 0 — Open-Meteo's
+  // hourly array begins at midnight of day one, so slice(0, 24) is mostly the
+  // past by afternoon and the model would narrate hours that already happened.
+  const nowStr = localNowISO(tz);
+  const currentHourStr = nowStr.slice(0, 14) + '00';
+  const base = bundle.hourly.findIndex((h) => h.time >= currentHourStr);
+  const start = base < 0 ? 0 : base;
+
+  // Short-term precip timing from minutely_15 — lets the briefing say
+  // "rain starting around 2:30" instead of hour-granularity guesses.
+  let next2hPrecip: string | undefined;
+  if (bundle.minutely.length) {
+    const mBase = bundle.minutely.findIndex((p) => p.time >= currentHourStr);
+    const window = mBase < 0 ? [] : bundle.minutely.slice(mBase, mBase + 8);
+    const wet = window.filter((p) => p.precipitation > 0);
+    next2hPrecip = wet.length === 0
+      ? 'no precipitation expected in the next 2 hours'
+      : `precipitation in the next 2 hours at: ${wet.map((p) => hourMinLabel(p.time)).join(', ')}`;
+  }
+
   return {
     location: [bundle.location.name, bundle.location.admin1, bundle.location.country].filter(Boolean).join(', '),
     units: bundle.units,
-    timezone: bundle.location.timezone,
+    timezone: tz,
+    localTimeNow: hourMinLabel(nowStr),
     now: {
       time: bundle.current.time,
       temperature: round(bundle.current.temperature),
@@ -86,9 +115,16 @@ function digest(bundle: WeatherBundle): ForecastDigest {
       uv: round(bundle.current.uvIndex),
       isDay: bundle.current.isDay,
     },
+    activeAlerts: bundle.alerts.map((a) => ({
+      event: a.event,
+      severity: a.severity,
+      headline: a.headline,
+      until: a.end,
+    })),
+    next2hPrecip,
     // Sample every 2 hours to keep the prompt small while preserving the shape of the day.
-    next24h: bundle.hourly.slice(0, 24).filter((_, i) => i % 2 === 0).map((h) => ({
-      time: localLabel(h.time, bundle.location.timezone),
+    next24h: bundle.hourly.slice(start, start + 24).filter((_, i) => i % 2 === 0).map((h) => ({
+      time: localLabel(h.time),
       t: round(h.temperature),
       condition: getCondition(h.weatherCode).label,
       windDir: round(h.windDirection),
@@ -104,8 +140,8 @@ function digest(bundle: WeatherBundle): ForecastDigest {
       precipMm: round(d.precipitationSum, 1),
       precipPct: round(d.precipitationProbabilityMax),
       gustMax: round(d.windGustMax),
-      sunrise: localLabel(d.sunrise, bundle.location.timezone),
-      sunset: localLabel(d.sunset, bundle.location.timezone),
+      sunrise: localLabel(d.sunrise),
+      sunset: localLabel(d.sunset),
     })),
   };
 }
@@ -115,10 +151,23 @@ function round(n: number, decimals = 0): number {
   return Math.round(n * m) / m;
 }
 
-function localLabel(iso: string, tz: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    timeZone: tz,
-    weekday: 'short',
+/**
+ * Open-Meteo timestamps are bare local ISO ("2026-08-13T14:00") already in the
+ * location's timezone. `new Date(iso)` would parse them in the BROWSER's
+ * timezone and then re-convert — shifting every label whenever the viewer is
+ * in a different zone than the location. Read the digits directly instead.
+ */
+function localLabel(iso: string): string {
+  const weekday = new Date(iso.slice(0, 10) + 'T12:00:00Z')
+    .toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+  return `${weekday} ${hourMinLabel(iso)}`;
+}
+
+function hourMinLabel(iso: string): string {
+  const h = parseInt(iso.slice(11, 13), 10);
+  const min = parseInt(iso.slice(14, 16), 10);
+  if (isNaN(h)) return iso;
+  return new Date(1970, 0, 1, h, isNaN(min) ? 0 : min).toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
   });
@@ -173,7 +222,7 @@ export async function streamBriefing(bundle: WeatherBundle, opts: BriefingOption
   const c = getClient();
   if (!c) throw new Error('LLM disabled — set VITE_ANTHROPIC_API_KEY and VITE_LLM_PROVIDER=anthropic.');
 
-  const model = (import.meta.env.VITE_ANTHROPIC_MODEL as string | undefined) ?? 'claude-opus-4-5';
+  const model = (import.meta.env.VITE_ANTHROPIC_MODEL as string | undefined) ?? 'claude-sonnet-5';
   const data = digest(bundle);
   const userMessage = [
     TONE_GUIDE[opts.tone],

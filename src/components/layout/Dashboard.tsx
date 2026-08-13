@@ -168,7 +168,9 @@ export function Dashboard() {
                 </div>
                 <div className="col-span-12 lg:col-span-7">
                   <CardReveal delay={0.16}>
-                    <WeatherSummary bundle={weather.data} />
+                    {/* Alerts merged in so the AI briefing can lead with them —
+                        the adapter's bundle always has alerts: []. */}
+                    <WeatherSummary bundle={{ ...weather.data, alerts: mergedAlerts }} />
                   </CardReveal>
                 </div>
               </div>

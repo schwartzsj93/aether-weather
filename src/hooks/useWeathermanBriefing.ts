@@ -28,7 +28,10 @@ interface CachedEntry { text: string; createdAt: number; }
 
 function cacheKey(bundle: WeatherBundle, tone: BriefingTone): string {
   const hourBucket = Math.floor(bundle.fetchedAt / (30 * 60 * 1000)); // 30-min granularity
-  return `${CACHE_PREFIX}${bundle.location.id}:${bundle.units}:${tone}:${hourBucket}`;
+  // Alert ids in the key: a new warning must regenerate the briefing rather
+  // than serve cached prose that predates it.
+  const alertSig = bundle.alerts.map((a) => a.id).sort().join(',');
+  return `${CACHE_PREFIX}${bundle.location.id}:${bundle.units}:${tone}:${hourBucket}:${alertSig}`;
 }
 
 function readCache(key: string): string | null {
@@ -104,13 +107,14 @@ export function useWeathermanBriefing(
       });
   }, []);
 
-  // Auto-run on bundle/tone change (or after regenerate bumps `nonce`)
+  // Auto-run on bundle/tone/alert change (or after regenerate bumps `nonce`)
+  const alertSig = bundle?.alerts.map((a) => a.id).sort().join(',') ?? '';
   useEffect(() => {
     if (!enabled || !bundle) return;
     run(bundle, tone, nonce.current > 0);
     return () => ctrlRef.current?.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, bundle?.location.id, bundle?.units, bundle?.fetchedAt, tone, run]);
+  }, [enabled, bundle?.location.id, bundle?.units, bundle?.fetchedAt, alertSig, tone, run]);
 
   const regenerate = useCallback(() => {
     if (!bundle) return;
